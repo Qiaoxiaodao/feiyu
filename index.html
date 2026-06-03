@@ -92,7 +92,8 @@
             </span>
         </div>
         <div class="flex flex-wrap gap-3 justify-center">
-            <button onclick="openStatsModal()" class="sketch-border sketch-btn bg-white px-4 py-2 font-bold hover:bg-yellow-50">📊 详细统计与筛选</button>
+            <!-- 修改点：标题更名为“📊 数据分析” -->
+            <button onclick="openStatsModal()" class="sketch-border sketch-btn bg-white px-4 py-2 font-bold hover:bg-yellow-50">📊 数据分析</button>
             <button onclick="openTaskModal()" class="sketch-border sketch-btn bg-indigo-100 px-4 py-2 font-bold hover:bg-indigo-200">📝 管理任务库</button>
         </div>
     </header>
@@ -357,14 +358,15 @@
                     `;
                 }).join('');
 
+                // 修改点：为名字添加双击编辑功能 (ondblclick)
                 const cardHTML = `
                     <div class="sketch-border bg-white p-6 flex flex-col gap-4 relative transition-colors duration-300 min-h-[350px]">
-                        <div class="flex items-center gap-4 ${alertClass}">
-                            <div class="w-16 h-16 cursor-pointer hover:scale-105 transition-transform select-none" onclick="openAvatarModal('${member.id}')" title="更换头像">
+                        <div class="flex items-center gap-4">
+                            <div class="w-16 h-16 cursor-pointer hover:scale-105 transition-transform select-none shrink-0" onclick="openAvatarModal('${member.id}')" title="更换头像">
                                 ${getAvatarHTML(member)}
                             </div>
-                            <div class="flex-1">
-                                <h3 class="text-3xl font-bold tracking-wide">${member.name}</h3>
+                            <div class="flex-1 min-w-0 ${alertClass}">
+                                <h3 class="text-3xl font-bold tracking-wide truncate cursor-text" ondblclick="editMemberName('${member.id}', this)" title="双击修改名字">${member.name}</h3>
                             </div>
                         </div>
                         
@@ -392,6 +394,28 @@
                 `;
                 container.insertAdjacentHTML('beforeend', cardHTML);
             });
+        }
+
+        // --- 名字修改功能 ---
+        function editMemberName(memberId, element) {
+            const member = members.find(m => m.id === memberId);
+            if (!member) return;
+            element.outerHTML = `<input type="text" class="text-3xl font-bold tracking-wide sketch-border-sm bg-white p-1 max-w-[150px] outline-none" value="${member.name}" onblur="saveMemberName('${memberId}', this)" onkeypress="if(event.key === 'Enter') this.blur()" autofocus>`;
+        }
+
+        function saveMemberName(memberId, inputElement) {
+            const newName = inputElement.value.trim();
+            if (newName) {
+                const member = members.find(m => m.id === memberId);
+                if (member) {
+                    const oldName = member.name;
+                    member.name = newName;
+                    saveMembers();
+                    logAction(memberId, `将名字从 [${oldName}] 修改为 [${newName}] ✏️`);
+                    renderBottomStats(); // 同步刷新底部图标名字
+                }
+            }
+            renderBoard();
         }
 
         // --- 细化到每个任务的状态控制 ---
