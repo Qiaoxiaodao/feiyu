@@ -4,1098 +4,154 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FEIYU天天向上团队看板</title>
-    <!-- 引入 Tailwind CSS 进行基础布局 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Alpine.js 极简前端响应式框架 -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <!-- 引入 Supabase 官方云数据库连接引擎 -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- 引入 Google Font 的手绘质感英文字体 -->
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
     
     <script>
-        // =========================================================================
-        // ☁️ 云数据库配置（Mac 用户请在下方单引号内填入您在 Supabase 复制的两个暗号）
-        // =========================================================================
-        const MY_SUPABASE_URL =  https://wyicdosflniljzsaduaz.supabase.co/rest/v1/; // 填入你的 Project URL
-        const MY_SUPABASE_KEY = sb_publishable_YRM7T9eLC2Qqf7kAO265mQ_IQ-YC-j4; // 填入你的 anon / public 密钥
-        // =========================================================================
+        // 在这里填入你的 Supabase 配置（如不使用云端，请留空，系统会自动切换本地模式）
+        const MY_SUPABASE_URL = https://wyicdosflniljzsaduaz.supabase.co/rest/v1/;
+        const MY_SUPABASE_KEY = sb_publishable_YRM7T9eLC2Qqf7kAO265mQ_IQ-YC-j4;
     </script>
 
     <style>
-        body {
-            background-color: #faf6f0;
-            background-image: 
-                linear-gradient(rgba(139, 92, 26, 0.04) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(139, 92, 26, 0.04) 1px, transparent 1px);
-            background-size: 25px 25px;
-            font-family: 'Comic Sans MS', 'Chalkboard SE', 'ZCOOL KuaiLe', 'STKaiti', 'Kaiti', cursive, sans-serif;
-            color: #2b2b2b;
-        }
-
-        /* 笔直端庄的直角边框 */
-        .sketch-border {
-            border: 3px solid #2b2b2b;
-            border-radius: 0px;
-        }
-
-        .sketch-border-sm {
-            border: 2px solid #2b2b2b;
-            border-radius: 0px;
-        }
-
-        /* 拟纸张重影阴影 */
-        .sketch-shadow {
-            box-shadow: 6px 6px 0px rgba(43, 43, 43, 1);
-            transition: all 0.15s ease;
-        }
-
-        .sketch-shadow:hover {
-            transform: translate(-2px, -2px);
-            box-shadow: 8px 8px 0px rgba(43, 43, 43, 1);
-        }
-
-        .sketch-shadow-active:active {
-            transform: translate(2px, 2px);
-            box-shadow: 2px 2px 0px rgba(43, 43, 43, 1);
-        }
-
-        /* 手绘风按钮 */
-        .sketch-btn {
-            border: 2px solid #2b2b2b;
-            border-radius: 0px;
-            box-shadow: 3px 3px 0px rgba(43, 43, 43, 1);
-            transition: transform 0.1s, box-shadow 0.1s;
-        }
-        .sketch-btn:active {
-            transform: translate(2px, 2px);
-            box-shadow: 1px 1px 0px rgba(43, 43, 43, 1);
-        }
-
-        /* 增强的醒目呼吸缩放动画 */
+        body { background-color: #faf6f0; font-family: 'ZCOOL KuaiLe', sans-serif; color: #2b2b2b; }
+        .sketch-border { border: 3px solid #2b2b2b; }
+        .sketch-shadow { box-shadow: 6px 6px 0px rgba(43, 43, 43, 1); }
+        .pulse-remind { animation: strong-breath 1.5s infinite ease-in-out; border: 4px solid #ef4444 !important; }
         @keyframes strong-breath {
-            0%, 100% {
-                transform: scale(1);
-                border-color: #ef4444;
-                box-shadow: 0 0 0 0px rgba(239, 68, 68, 0);
-            }
-            50% {
-                transform: scale(1.12);
-                border-color: #f87171;
-                background-color: #fef2f2 !important;
-                box-shadow: 0 0 15px 5px rgba(239, 68, 68, 0.35);
-            }
-        }
-
-        .pulse-remind {
-            animation: strong-breath 1.4s infinite ease-in-out;
-            border-color: #ef4444 !important;
-            background-color: #fef2f2 !important;
-            z-index: 10;
-        }
-
-        .handwritten-num {
-            font-family: 'Caveat', cursive;
-        }
-
-        /* 极简直角滚动条 */
-        ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #faf6f0;
-            border-left: 2px solid #2b2b2b;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #2b2b2b;
-            border: 2px solid #faf6f0;
-            border-radius: 0px;
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0px rgba(239, 68, 68, 0); }
+            50% { transform: scale(1.05); box-shadow: 0 0 20px 10px rgba(239, 68, 68, 0.6); }
         }
     </style>
 </head>
-<body x-data="trackerApp()" x-init="initApp()" class="p-4 md:p-8 min-h-screen flex flex-col justify-between">
+<body x-data="trackerApp()" x-init="initApp()" class="p-4 md:p-8 min-h-screen">
 
-    <script>
-        // 10款全新高清晰、治愈感纯手绘非圆形动物头像
-        const ANIMAL_AVATARS = [
-            // 0: 慵懒猫咪
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#fff" stroke="#2b2b2b" stroke-width="3"/><path d="M25 20 L40 38 L18 42 Z" fill="#ffd1d1" stroke="#2b2b2b" stroke-width="3"/><path d="M75 20 L60 38 L82 42 Z" fill="#ffd1d1" stroke="#2b2b2b" stroke-width="3"/><circle cx="36" cy="48" r="4.5" fill="#2b2b2b"/><circle cx="64" cy="48" r="4.5" fill="#2b2b2b"/><ellipse cx="50" cy="56" rx="4.5" ry="3" fill="#f87171" stroke="#2b2b2b" stroke-width="2"/><path d="M44 64 Q50 68 56 64" fill="none" stroke="#2b2b2b" stroke-width="2.5"/><path d="M12 52 L28 54 M10 58 L27 58 M12 64 L28 62 M88 52 L72 54 M90 58 L73 58 M88 64 L72 62" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"/><ellipse cx="28" cy="54" rx="4" ry="2" fill="#fecdd3" /><ellipse cx="72" cy="54" rx="4" ry="2" fill="#fecdd3" /><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">小猫</text></svg>`,
-            // 1: 忠诚小狗
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#fed7aa" stroke="#2b2b2b" stroke-width="3"/><path d="M14 26 Q8 50 20 42" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/><path d="M86 26 Q92 50 80 42" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/><ellipse cx="50" cy="52" rx="30" ry="26" fill="#fff" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="36" cy="45" r="4.5" fill="#2b2b2b"/><circle cx="64" cy="45" r="4.5" fill="#2b2b2b"/><polygon points="46,54 54,54 50,60" fill="#2b2b2b" stroke="#2b2b2b" stroke-width="1.5"/><path d="M44 65 Q50 61 56 65" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"/><ellipse cx="26" cy="51" rx="4" ry="2" fill="#ffb7b7"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">小狗</text></svg>`,
-            // 2: 胖嘟熊猫
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#fff" stroke="#2b2b2b" stroke-width="3"/><circle cx="22" cy="22" r="14" fill="#2b2b2b"/><circle cx="78" cy="22" r="14" fill="#2b2b2b"/><ellipse cx="32" cy="48" rx="10" ry="14" fill="#2b2b2b" transform="rotate(-15 32 48)"/><ellipse cx="68" cy="48" rx="10" ry="14" fill="#2b2b2b" transform="rotate(15 68 48)"/><circle cx="34" cy="46" r="3.5" fill="#fff"/><circle cx="66" cy="46" r="3.5" fill="#fff"/><ellipse cx="50" cy="62" rx="6" ry="4" fill="#2b2b2b"/><path d="M44 70 Q50 74 56 70" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">熊猫</text></svg>`,
-            // 3: 萌萌小兔
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#fff" stroke="#2b2b2b" stroke-width="3"/><path d="M30 26 C22 -2 38 -2 35 26" fill="#fff" stroke="#2b2b2b" stroke-width="2.5" stroke-linecap="round"/><path d="M70 26 C78 -2 62 -2 65 26" fill="#fff" stroke="#2b2b2b" stroke-width="2.5" stroke-linecap="round"/><circle cx="34" cy="48" r="4.5" fill="#2b2b2b"/><circle cx="66" cy="48" r="4.5" fill="#2b2b2b"/><ellipse cx="50" cy="56" rx="4" ry="2.5" fill="#ff8a8a" stroke="#2b2b2b" stroke-width="1.5"/><path d="M46 63 Q50 66 54 63" fill="none" stroke="#2b2b2b" stroke-width="2"/><ellipse cx="22" cy="54" rx="5" ry="2.5" fill="#ffd1d1"/><ellipse cx="78" cy="54" rx="5" ry="2.5" fill="#ffd1d1"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">小兔</text></svg>`,
-            // 4: 蜜糖小熊
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#dfc09f" stroke="#2b2b2b" stroke-width="3"/><circle cx="22" cy="22" r="13" fill="#b1875e" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="78" cy="22" r="13" fill="#b1875e" stroke="#2b2b2b" stroke-width="2.5"/><ellipse cx="50" cy="52" rx="32" ry="28" fill="#dfc09f" stroke="#2b2b2b" stroke-width="2"/><circle cx="34" cy="45" r="4.5" fill="#2b2b2b"/><circle cx="66" cy="45" r="4.5" fill="#2b2b2b"/><ellipse cx="50" cy="60" rx="12" ry="9" fill="#fcf0e3" stroke="#2b2b2b" stroke-width="2"/><circle cx="50" cy="56" r="3.5" fill="#2b2b2b"/><path d="M44 65 Q50 68 56 65" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">小熊</text></svg>`,
-            // 5: 聪明狐狸
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#f97316" stroke="#2b2b2b" stroke-width="3"/><polygon points="12,12 36,32 16,38" fill="#c2410c" stroke="#2b2b2b" stroke-width="2.5"/><polygon points="88,12 64,32 84,38" fill="#c2410c" stroke="#2b2b2b" stroke-width="2.5"/><ellipse cx="50" cy="58" rx="34" ry="24" fill="#fff" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="33" cy="48" r="4.5" fill="#2b2b2b"/><circle cx="67" cy="48" r="4.5" fill="#2b2b2b"/><polygon points="46,58 54,58 50,65" fill="#2b2b2b" stroke="#2b2b2b" stroke-width="2"/><path d="M45 70 Q50 73 55 70" fill="none" stroke="#2b2b2b" stroke-width="1.5"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">小狐</text></svg>`,
-            // 6: 呆萌考拉
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#94a3b8" stroke="#2b2b2b" stroke-width="3"/><circle cx="16" cy="30" r="16" fill="#64748b" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="84" cy="30" r="16" fill="#64748b" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="16" cy="30" r="10" fill="#f1f5f9"/><circle cx="84" cy="30" r="10" fill="#f1f5f9"/><circle cx="34" cy="50" r="4" fill="#2b2b2b"/><circle cx="66" cy="50" r="4" fill="#2b2b2b"/><ellipse cx="50" cy="58" rx="8" ry="12" fill="#1e293b" stroke="#2b2b2b" stroke-width="2"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">考拉</text></svg>`,
-            // 7: 快乐青蛙
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#4ade80" stroke="#2b2b2b" stroke-width="3"/><circle cx="30" cy="32" r="12" fill="#4ade80" stroke="#2b2b2b" stroke-width="3"/><circle cx="70" cy="32" r="12" fill="#4ade80" stroke="#2b2b2b" stroke-width="3"/><circle cx="30" cy="32" r="5" fill="#2b2b2b"/><circle cx="70" cy="32" r="5" fill="#2b2b2b"/><circle cx="32" cy="30" r="1.5" fill="#fff"/><circle cx="72" cy="30" r="1.5" fill="#fff"/><path d="M25 58 Q50 78 75 58" fill="none" stroke="#2b2b2b" stroke-width="4" stroke-linecap="round"/><ellipse cx="20" cy="54" rx="4.5" ry="2.5" fill="#f87171"/><ellipse cx="80" cy="54" rx="4.5" ry="2.5" fill="#f87171"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">青蛙</text></svg>`,
-            // 8: 仓鼠宝宝
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#fed7aa" stroke="#2b2b2b" stroke-width="3"/><ellipse cx="24" cy="24" rx="8" ry="11" fill="#f97316" stroke="#2b2b2b" stroke-width="2"/><ellipse cx="76" cy="24" rx="8" ry="11" fill="#f97316" stroke="#2b2b2b" stroke-width="2"/><ellipse cx="50" cy="55" rx="34" ry="25" fill="#fff" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="34" cy="46" r="4.5" fill="#2b2b2b"/><circle cx="66" cy="46" r="4.5" fill="#2b2b2b"/><ellipse cx="20" cy="55" rx="6" ry="4" fill="#fda4af"/><ellipse cx="80" cy="55" rx="6" ry="4" fill="#fda4af"/><ellipse cx="50" cy="55" rx="4.5" ry="3" fill="#f43f5e"/><path d="M46 64 Q50 67 54 64" fill="none" stroke="#2b2b2b" stroke-width="2"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">仓鼠</text></svg>`,
-            // 9: 精致粉猪
-            `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="5" y="5" width="90" height="90" fill="#fbcfe8" stroke="#2b2b2b" stroke-width="3"/><path d="M20 16 Q10 4 24 10" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/><path d="M80 16 Q90 4 76 10" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/><circle cx="34" cy="42" r="4.5" fill="#2b2b2b"/><circle cx="66" cy="42" r="4.5" fill="#2b2b2b"/><ellipse cx="50" cy="56" rx="14" ry="10" fill="#f472b6" stroke="#2b2b2b" stroke-width="2.5"/><circle cx="44" cy="56" r="3" fill="#2b2b2b"/><circle cx="56" cy="56" r="3" fill="#2b2b2b"/><path d="M42 74 Q50 78 58 74" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"/><text x="50" y="90" font-size="11" font-weight="bold" fill="#2b2b2b" text-anchor="middle">小猪</text></svg>`
-        ];
-    </script>
+    <header class="mb-8">
+        <div class="flex justify-between items-center bg-[#fdfaf2] p-6 sketch-border sketch-shadow">
+            <h1 class="text-3xl font-black">🚀 FEIYU天天向上团队看板</h1>
+            <div x-text="currentTime" class="font-bold text-xl"></div>
+        </div>
+    </header>
+
+    <main class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+        <template x-for="m in members" :key="m.id">
+            <div class="bg-white sketch-border p-6 sketch-shadow flex flex-col" :class="shouldPulse(m) ? 'pulse-remind' : ''">
+                <!-- 头部：头像与姓名 -->
+                <div class="flex items-center gap-4 mb-4">
+                    <div @click="openAvatarModal(m.id)" class="w-16 h-16 border-2 border-[#2b2b2b] cursor-pointer overflow-hidden">
+                        <img v-if="m.customAvatar" :src="m.customAvatar" class="w-full h-full object-cover">
+                        <div v-else class="w-full h-full bg-gray-200"></div>
+                    </div>
+                    <h2 class="text-2xl font-black" x-text="m.name"></h2>
+                </div>
+
+                <!-- 任务清单 -->
+                <ul class="space-y-2 mb-4 flex-grow">
+                    <template x-for="task in m.tasks" :key="task.id">
+                        <li class="flex items-center justify-between p-2 border-b border-gray-100">
+                            <span x-text="task.text" :class="task.state === 'green' ? 'line-through text-gray-400' : ''"></span>
+                            <div class="flex gap-1">
+                                <button @click="changeTaskState(m, task.id, 'red')" class="w-6 h-6 bg-red-200"></button>
+                                <button @click="changeTaskState(m, task.id, 'orange')" class="w-6 h-6 bg-orange-200"></button>
+                                <button @click="changeTaskState(m, task.id, 'green')" class="w-6 h-6 bg-green-200"></button>
+                            </div>
+                        </li>
+                    </template>
+                </ul>
+
+                <!-- 备注 -->
+                <div class="mt-4">
+                    <label class="text-xs font-bold block mb-1">今日备注：</label>
+                    <input type="text" x-model="m.remark" @blur="saveData()" class="w-full p-2 border sketch-border" placeholder="记录进度...">
+                </div>
+            </div>
+        </template>
+    </main>
+
+    <!-- 历史数据 -->
+    <section class="bg-white p-6 sketch-border sketch-shadow">
+        <h2 class="text-xl font-black mb-4">📜 历史进度概览</h2>
+        <template x-for="item in history" :key="item.date">
+            <div class="p-2 border-b text-sm">
+                <span x-text="item.date"></span>: <span x-text="item.remark"></span>
+            </div>
+        </template>
+    </section>
+
+    <!-- 头像弹窗 -->
+    <div x-show="avatarModalOpen" class="fixed inset-0 bg-black/50 flex items-center justify-center">
+        <div class="bg-white p-6 sketch-border">
+            <h3 class="font-bold mb-4">更换头像</h3>
+            <input type="file" @change="uploadAvatar($event)" accept="image/*">
+            <button @click="avatarModalOpen=false" class="mt-4 block bg-gray-200 px-4 py-2">关闭</button>
+        </div>
+    </div>
 
     <script>
         function trackerApp() {
             return {
-                currentTime: '18:15',
-                timeTimer: null,
-                
-                // Supabase 云连接客户端
-                supabase: null,
-                isCloudMode: false,
-                lastSyncTime: '未同步',
-                syncInterval: null,
-
-                // 数据存储
+                currentTime: new Date().toLocaleTimeString(),
                 members: [],
                 history: [],
-                
-                // 日期筛选
-                startDate: '',
-                endDate: '',
-                
-                // 弹窗控制
-                showAvatarModal: false,
-                currentSelectMemberId: null,
-                avatarsList: ANIMAL_AVATARS,
-                showTaskModal: false,
-                
-                // 替代自带弹窗
-                customAlert: { show: false, title: '', message: '' },
-                customConfirm: { show: false, title: '', message: '', action: null },
+                avatarModalOpen: false,
+                currentMId: null,
 
-                // 系统初始化
-                async initApp() {
-                    this.startClock();
-                    this.initDates();
-
-                    // 1. 尝试初始化 Supabase 云端
-                    if (window.supabase && MY_SUPABASE_URL && MY_SUPABASE_URL !== 'YOUR_SUPABASE_URL_HERE' && MY_SUPABASE_KEY !== 'YOUR_SUPABASE_KEY_HERE') {
-                        try {
-                            this.supabase = window.supabase.createClient(MY_SUPABASE_URL, MY_SUPABASE_KEY);
-                            this.isCloudMode = true;
-                            console.log("⚡ Supabase 云数据库初始化成功！");
-                        } catch (e) {
-                            console.error("❌ Supabase 初始化失败，自动降级为本地离线模式", e);
-                        }
-                    }
-
-                    // 2. 加载数据
-                    await this.loadAllData();
-                    
-                    // 3. 开启每5秒自动轮询同步机制（全员免刷新同步）
-                    // 优化：打字时自动规避，防止打断输入！
-                    if (this.isCloudMode) {
-                        this.syncInterval = setInterval(() => {
-                            this.loadAllData(true); // 静默同步
-                        }, 5000);
-                    }
-
-                    // 4. 深夜12点自动检测重置任务为红色，但不重置备注
-                    this.checkDailyReset();
-                    setInterval(() => {
-                        this.checkDailyReset();
-                    }, 60000);
+                initApp() {
+                    setInterval(() => this.currentTime = new Date().toLocaleTimeString(), 1000);
+                    this.loadData();
                 },
 
-                initDates() {
-                    const today = new Date();
-                    const sevenDaysAgo = new Date();
-                    sevenDaysAgo.setDate(today.getDate() - 7);
-                    this.endDate = today.toISOString().split('T')[0];
-                    this.startDate = sevenDaysAgo.toISOString().split('T')[0];
-                },
-
-                startClock() {
-                    const updateTime = () => {
-                        const now = new Date();
-                        this.currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-                    };
-                    updateTime();
-                    this.timeTimer = setInterval(updateTime, 60000);
-                },
-
-                async loadAllData(isSilent = false) {
-                    // 优化：如果是静默同步，并且用户当前正在输入，则不刷新数据，防光标丢失！
-                    if (isSilent && document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-                        return; 
-                    }
-
-                    if (this.isCloudMode) {
-                        try {
-                            // 从云端提取成员信息
-                            const { data: cloudMembers, error: err1 } = await this.supabase
-                                .from('feiyu_members')
-                                .select('*')
-                                .order('id', { ascending: true });
-                            
-                            if (err1) throw err1;
-
-                            if (cloudMembers && cloudMembers.length > 0) {
-                                // 提取的任务需要解析 JSON 格式
-                                this.members = cloudMembers.map(m => {
-                                    // 兼容支持通过 [AVATAR] 标识解析自定义Base64头像
-                                    let parsedName = m.name || '';
-                                    let customAvatar = null;
-                                    if (parsedName.includes('[AVATAR]')) {
-                                        const parts = parsedName.split('[AVATAR]');
-                                        parsedName = parts[0];
-                                        customAvatar = parts[1];
-                                    }
-
-                                    return {
-                                        id: m.id,
-                                        name: parsedName,
-                                        customAvatar: customAvatar,
-                                        avatarIdx: m.avatar_idx,
-                                        defaultTasks: typeof m.default_tasks === 'string' ? JSON.parse(m.default_tasks) : m.default_tasks,
-                                        tasks: typeof m.tasks === 'string' ? JSON.parse(m.tasks) : m.tasks,
-                                        remark: m.remark || ''
-                                    };
-                                });
-                            } else if (!isSilent) {
-                                // 第一次使用云数据库时，注入初始化4个核心员工
-                                await this.initDefaultMembersToCloud();
-                            }
-
-                            // 提取历史记录
-                            const { data: cloudHistory, error: err2 } = await this.supabase
-                                .from('feiyu_history')
-                                .select('*');
-                            if (err2) throw err2;
-                            this.history = cloudHistory || [];
-
-                            const now = new Date();
-                            this.lastSyncTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-                        } catch (e) {
-                            console.error("云数据库同步失败，转为本地备用加载:", e);
-                            this.loadLocalBackup();
-                        }
+                loadData() {
+                    const localData = localStorage.getItem('feiyu_data');
+                    if (localData) {
+                        const parsed = JSON.parse(localData);
+                        this.members = parsed.members;
+                        this.history = parsed.history;
                     } else {
-                        this.loadLocalBackup();
+                        this.members = [
+                            { id: 1, name: 'SY', tasks: [{id:1, text:'任务1', state:'red'}], remark: '', customAvatar: '' },
+                            { id: 2, name: 'YCF', tasks: [{id:2, text:'任务2', state:'red'}], remark: '', customAvatar: '' }
+                        ];
                     }
                 },
 
-                loadLocalBackup() {
-                    const cachedMembers = localStorage.getItem('feiyu_members');
-                    const cachedHistory = localStorage.getItem('feiyu_history');
-                    if (cachedMembers) {
-                        this.members = JSON.parse(cachedMembers);
-                    } else {
-                        this.initDefaultMembersLocal();
-                    }
-                    if (cachedHistory) this.history = JSON.parse(cachedHistory);
+                saveData() {
+                    localStorage.setItem('feiyu_data', JSON.stringify({ members: this.members, history: this.history }));
                 },
 
-                async saveData() {
-                    if (this.isCloudMode) {
-                        try {
-                            // 遍历每个成员，推送到 Supabase 云端
-                            for (let m of this.members) {
-                                // 将名字与自定义头像拼接存入 name 字段（巧妙绕过数据库结构限制）
-                                let nameToSave = m.name;
-                                if (m.customAvatar) {
-                                    nameToSave += '[AVATAR]' + m.customAvatar;
-                                }
-
-                                await this.supabase.from('feiyu_members').upsert({
-                                    id: m.id,
-                                    name: nameToSave,
-                                    avatar_idx: m.avatarIdx,
-                                    default_tasks: m.defaultTasks,
-                                    tasks: m.tasks,
-                                    remark: m.remark || ''
-                                });
-                            }
-                        } catch (e) {
-                            console.error("推送云端失败:", e);
-                        }
-                    }
-                    // 无论有没有网，同时备份在本地 LocalStorage，防数据丢失
-                    localStorage.setItem('feiyu_members', JSON.stringify(this.members));
-                    localStorage.setItem('feiyu_history', JSON.stringify(this.history));
-                },
-
-                async initDefaultMembersToCloud() {
-                    const defaults = this.getDefaultConfig();
-                    for (let m of defaults) {
-                        await this.supabase.from('feiyu_members').insert({
-                            id: m.id,
-                            name: m.name,
-                            avatar_idx: m.avatarIdx,
-                            default_tasks: m.defaultTasks,
-                            tasks: m.tasks,
-                            remark: m.remark
-                        });
-                    }
-                    await this.loadAllData(true);
-                },
-
-                initDefaultMembersLocal() {
-                    this.members = this.getDefaultConfig();
+                changeTaskState(m, tid, state) {
+                    const t = m.tasks.find(x => x.id === tid);
+                    if(t) t.state = state;
                     this.saveData();
                 },
 
-                getDefaultConfig() {
-                    return [
-                        { 
-                            id: 1, 
-                            name: 'SY', 
-                            avatarIdx: 0, 
-                            customAvatar: null,
-                            defaultTasks: ['整理客户合同', '核对今日账目', '归档本周发票'],
-                            tasks: [
-                                { id: 101, text: '整理客户合同', state: 'red' },
-                                { id: 102, text: '核对今日账目', state: 'red' },
-                                { id: 103, text: '归档本周发票', state: 'red' }
-                            ],
-                            remark: '' 
-                        },
-                        { 
-                            id: 2, 
-                            name: 'YCF', 
-                            avatarIdx: 1, 
-                            customAvatar: null,
-                            defaultTasks: ['微信公众号文案排版', '发布今日推文', '回复后台粉丝留言'],
-                            tasks: [
-                                { id: 201, text: '微信公众号文案排版', state: 'red' },
-                                { id: 202, text: '发布今日推文', state: 'red' },
-                                { id: 203, text: '回复后台粉丝留言', state: 'red' }
-                            ],
-                            remark: '' 
-                        },
-                        { 
-                            id: 3, 
-                            name: 'LX', 
-                            avatarIdx: 3, 
-                            customAvatar: null,
-                            defaultTasks: ['设计端午节活动海报手稿', '修改上期画稿配色', '提交设计方案'],
-                            tasks: [
-                                { id: 301, text: '设计端午节活动海报手稿', state: 'red' },
-                                { id: 302, text: '修改上期画稿配色', state: 'red' },
-                                { id: 303, text: '提交设计方案', state: 'red' }
-                            ],
-                            remark: '' 
-                        },
-                        { 
-                            id: 4, 
-                            name: 'LYF', 
-                            avatarIdx: 9, 
-                            customAvatar: null,
-                            defaultTasks: ['跟进老客户售后', '处理退换货申请', '登记异常快递单号'],
-                            tasks: [
-                                { id: 401, text: '跟进老客户售后', state: 'red' },
-                                { id: 402, text: '处理退换货申请', state: 'red' },
-                                { id: 403, text: '登记异常快递单号', state: 'red' }
-                            ],
-                            remark: '' 
-                        }
-                    ];
-                },
-
-                addMember() {
-                    const newId = Date.now();
-                    const newName = '新成员' + (this.members.length + 1);
-                    const randomAvatar = Math.floor(Math.random() * this.avatarsList.length);
-                    this.members.push({
-                        id: newId,
-                        name: newName,
-                        avatarIdx: randomAvatar,
-                        customAvatar: null,
-                        defaultTasks: ['日常任务 1', '日常任务 2'],
-                        tasks: [
-                            { id: Date.now() + 1, text: '日常任务 1', state: 'red' },
-                            { id: Date.now() + 2, text: '日常任务 2', state: 'red' }
-                        ],
-                        remark: ''
-                    });
-                    this.saveData();
-                },
-
-                removeMember(id) {
-                    const m = this.members.find(x => x.id === id);
-                    if (!m) return;
-                    this.triggerConfirm('移除成员', `确定要从看板中清退成员 ${m.name} 吗？历史归档记录不受影响。`, async () => {
-                        if (this.isCloudMode) {
-                            await this.supabase.from('feiyu_members').delete().eq('id', id);
-                        }
-                        this.members = this.members.filter(m => m.id !== id);
-                        this.saveData();
-                    });
-                },
-
-                // 零点重置状态，将子任务复位为 🔴，但保留备注文字！
-                async checkDailyReset() {
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const lastOpenedDate = localStorage.getItem('feiyu_last_opened_date');
-
-                    if (lastOpenedDate && lastOpenedDate !== todayStr) {
-                        // 1. 将昨日数据最终封存记录到历史数据库中
-                        for (let m of this.members) {
-                            await this.logStateToHistoryOnDate(m, lastOpenedDate);
-                        }
-
-                        // 2. 仅重置当天的活动任务状态，保留备注 (remark) 不被重置！
-                        this.members.forEach(m => {
-                            m.tasks.forEach(t => {
-                                t.state = 'red';
-                            });
-                        });
-                        await this.saveData();
-                        this.triggerAlert('✨ 零点任务重置完毕', '检测到进入新的一天！系统已自动备份昨日成果，并将今日所有细分子任务重置为【🔴 未开始】，保留了您的个人工作备注。');
-                    }
-                    localStorage.setItem('feiyu_last_opened_date', todayStr);
-                },
-
-                changeTaskState(member, taskId, newState) {
-                    const task = member.tasks.find(t => t.id === taskId);
-                    if (task) {
-                        task.state = newState;
-                        this.saveData();
-                        this.logStateToHistoryOnDate(member, new Date().toISOString().split('T')[0]);
-                    }
-                },
-
-                appendTask(member) {
-                    const text = prompt("请输入要追加的新任务内容：");
-                    if (text && text.trim()) {
-                        member.tasks.push({
-                            id: Date.now(),
-                            text: text.trim(),
-                            state: 'red'
-                        });
-                        this.saveData();
-                        this.logStateToHistoryOnDate(member, new Date().toISOString().split('T')[0]);
-                    }
-                },
-
-                deleteTask(member, taskId) {
-                    member.tasks = member.tasks.filter(t => t.id !== taskId);
-                    this.saveData();
-                    this.logStateToHistoryOnDate(member, new Date().toISOString().split('T')[0]);
-                },
-
-                // 催办检测：到了下午18:30之后，如果还有子任务不是绿色🟢，就触发呼吸震动提醒
-                shouldPulse(member) {
-                    const hasUnfinished = member.tasks.some(t => t.state === 'red' || t.state === 'orange');
-                    if (!hasUnfinished) return false;
-
+                shouldPulse(m) {
                     const now = new Date();
-                    const currentVal = now.getHours() * 60 + now.getMinutes();
-                    const reminderVal = 18 * 60 + 30; // 18:30
-                    return currentVal >= reminderVal;
+                    const isLate = now.getHours() >= 18 && now.getMinutes() >= 30;
+                    return isLate && m.tasks.some(t => t.state !== 'green');
                 },
 
-                resetToday() {
-                    this.triggerConfirm('重置今天进度', '确定要将所有人今天的全部子任务状态重置为【🔴 完全未开始】吗？（备注文字将被保留）', () => {
-                        this.members.forEach(m => {
-                            m.tasks.forEach(t => t.state = 'red');
-                        });
-                        this.saveData();
-                        this.triggerAlert('重置成功', '今天所有人及细分任务状态已一键重置！');
-                    });
+                openAvatarModal(id) {
+                    this.currentMId = id;
+                    this.avatarModalOpen = true;
                 },
 
-                getTasksTextAreaValue(member) {
-                    return member.defaultTasks.join('\n');
-                },
-
-                updateDefaultTasks(member, text) {
-                    const newDefaultStrings = text.split('\n').map(t => t.trim()).filter(t => t.length > 0);
-                    member.defaultTasks = newDefaultStrings;
-
-                    const oldTasksMap = new Map(member.tasks.map(t => [t.text, t]));
-                    
-                    member.tasks = newDefaultStrings.map((tText, idx) => {
-                        if (oldTasksMap.has(tText)) {
-                            return {
-                                id: oldTasksMap.get(tText).id,
-                                text: tText,
-                                state: oldTasksMap.get(tText).state
-                            };
-                        } else {
-                            return {
-                                id: Date.now() + idx,
-                                text: tText,
-                                state: 'red'
-                            };
-                        }
-                    });
-
-                    this.saveData();
-                },
-
-                resetToDefaultTasks(member) {
-                    member.tasks = member.defaultTasks.map((t, idx) => ({
-                        id: Date.now() + idx,
-                        text: t,
-                        state: 'red'
-                    }));
-                    this.saveData();
-                    this.logStateToHistoryOnDate(member, new Date().toISOString().split('T')[0]);
-                },
-
-                async logStateToHistoryOnDate(member, dateStr) {
-                    const total = member.tasks.length;
-                    if (total === 0) return;
-
-                    let totalScore = 0;
-                    member.tasks.forEach(t => {
-                        if (t.state === 'green') totalScore += 1.0;
-                        if (t.state === 'orange') totalScore += 0.5;
-                    });
-                    const calculatedRate = Math.round((totalScore / total) * 100);
-                    const taskSnapshots = member.tasks.map(t => ({ text: t.text, state: t.state }));
-
-                    this.history = this.history.filter(h => !(h.date === dateStr && h.member_id === member.id));
-                    const logItem = {
-                        date: dateStr,
-                        member_id: member.id,
-                        rate: calculatedRate,
-                        remark: member.remark || '',
-                        tasks: taskSnapshots
-                    };
-
-                    this.history.push(logItem);
-
-                    if (this.isCloudMode) {
-                        try {
-                            await this.supabase.from('feiyu_history').upsert({
-                                date: dateStr,
-                                member_id: member.id,
-                                rate: calculatedRate,
-                                remark: member.remark || '',
-                                tasks: taskSnapshots
-                            });
-                        } catch (e) {
-                            console.error("上传历史归档错误:", e);
-                        }
-                    }
-
-                    localStorage.setItem('feiyu_history', JSON.stringify(this.history));
-                },
-
-                // 核心计算机制：根据输入的时间区间筛选，汇总计算，倒序排列 remarks
-                calculateStats() {
-                    const stats = {};
-                    this.members.forEach(m => {
-                        stats[m.name] = { id: m.id, totalDays: 0, sumRate: 0, remarks: [] };
-                    });
-
-                    const start = this.startDate ? new Date(this.startDate + 'T00:00:00') : new Date(0);
-                    const end = this.endDate ? new Date(this.endDate + 'T23:59:59') : new Date();
-
-                    this.history.forEach(h => {
-                        const hDate = new Date(h.date + 'T12:00:00');
-                        if (hDate >= start && hDate <= end) {
-                            const mId = h.member_id;
-                            const name = this.getMemberNameById(mId);
-                            if (name && stats[name]) {
-                                stats[name].totalDays++;
-                                stats[name].sumRate += h.rate;
-                                if (h.remark && h.remark !== '无备注') {
-                                    stats[name].remarks.push({ date: h.date, text: h.remark, rate: h.rate });
-                                }
-                            }
-                        }
-                    });
-
-                    const result = [];
-                    Object.keys(stats).forEach(name => {
-                        const s = stats[name];
-                        const averageRate = s.totalDays > 0 ? Math.round(s.sumRate / s.totalDays) : 0;
-                        
-                        // 优化：最新的历史打卡和留言倒序排列（新留言放最上面）
-                        s.remarks.sort((a, b) => b.date.localeCompare(a.date));
-
-                        result.push({
-                            name: name,
-                            rate: averageRate,
-                            days: s.totalDays,
-                            remarks: s.remarks
-                        });
-                    });
-
-                    return result;
-                },
-
-                getMemberNameById(id) {
-                    const m = this.members.find(x => x.id === id);
-                    return m ? m.name : null;
-                },
-
-                openAvatarPicker(memberId) {
-                    this.currentSelectMemberId = memberId;
-                    this.showAvatarModal = true;
-                },
-
-                selectAvatar(idx) {
-                    const m = this.members.find(member => member.id === this.currentSelectMemberId);
-                    if (m) {
-                        m.customAvatar = null; // 清除之前的自定义头像
-                        m.avatarIdx = idx;
-                        this.saveData();
-                    }
-                    this.showAvatarModal = false;
-                },
-
-                // 核心功能：处理自定义头像上传并进行智能高保真压缩
-                uploadCustomAvatar(event) {
+                uploadAvatar(event) {
                     const file = event.target.files[0];
-                    if (!file) return;
-
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        const img = new Image();
-                        img.onload = () => {
-                            // 使用 Canvas 自动进行 120x120 像素智能裁剪与无感高比例压缩，防止超出云端包尺寸限制
-                            const canvas = document.createElement('canvas');
-                            const ctx = canvas.getContext('2d');
-                            canvas.width = 120;
-                            canvas.height = 120;
-                            
-                            // 保持宽高比居中裁剪
-                            const size = Math.min(img.width, img.height);
-                            const x = (img.width - size) / 2;
-                            const y = (img.height - size) / 2;
-                            
-                            ctx.drawImage(img, x, y, size, size, 0, 0, 120, 120);
-                            
-                            // 导出为体积极小的高画质 Base64 字符串
-                            const compressedBase = canvas.toDataURL('image/jpeg', 0.85);
-
-                            const m = this.members.find(member => member.id === this.currentSelectMemberId);
-                            if (m) {
-                                m.customAvatar = compressedBase;
-                                this.saveData();
-                            }
-                            this.showAvatarModal = false;
-                        };
-                        img.src = e.target.result;
+                        const m = this.members.find(x => x.id === this.currentMId);
+                        if(m) m.customAvatar = e.target.result;
+                        this.saveData();
+                        this.avatarModalOpen = false;
                     };
                     reader.readAsDataURL(file);
-                },
-
-                triggerAlert(title, message) {
-                    this.customAlert.title = title;
-                    this.customAlert.message = message;
-                    this.customAlert.show = true;
-                },
-
-                triggerConfirm(title, message, action) {
-                    this.customConfirm.title = title;
-                    this.customConfirm.message = message;
-                    this.customConfirm.action = action;
-                    this.customConfirm.show = true;
                 }
-            };
+            }
         }
     </script>
-
-    <!-- 页眉区域 -->
-    <header class="mb-8">
-        <div class="flex flex-col lg:flex-row justify-between items-center bg-[#fdfaf2] p-4 sketch-border sketch-shadow mb-6">
-            
-            <div class="text-center lg:text-left mb-4 lg:mb-0">
-                <h1 class="text-3xl md:text-4xl font-extrabold flex items-center gap-2 justify-center lg:justify-start">
-                    🚀 <span class="tracking-wider">FEIYU天天向上</span>
-                </h1>
-            </div>
-
-            <!-- 同步状态及时间栏 -->
-            <div class="flex flex-wrap items-center justify-center gap-3">
-                
-                <!-- 云端 / 本地双模标识 -->
-                <div class="flex items-center gap-1.5 px-2.5 py-1.5 sketch-border-sm bg-white text-xs font-bold">
-                    <template x-if="isCloudMode">
-                        <span class="text-emerald-600 flex items-center gap-1">
-                            <span class="w-2.5 h-2.5 bg-emerald-500 inline-block animate-ping rounded-full"></span>
-                            ☁️ 联机同步中 (同步频率: 5秒/次)
-                        </span>
-                    </template>
-                    <template x-if="!isCloudMode">
-                        <span class="text-amber-600">
-                            🏠 单机演示模式 (未绑定云数据库)
-                        </span>
-                    </template>
-                </div>
-
-                <div class="bg-white px-3 py-2 sketch-border-sm flex items-center gap-2 text-sm">
-                    <span>🕰️</span>
-                    <span class="font-bold handwritten-num" x-text="currentTime">18:15</span>
-                    <span class="text-xs px-2 py-0.5 bg-amber-100 text-amber-800">真实时间</span>
-                </div>
-                
-                <button 
-                    @click="resetToday()" 
-                    class="sketch-btn bg-yellow-100 hover:bg-yellow-200 px-3 py-2 font-bold text-xs sketch-shadow-active">
-                    <span>🔄 重置今天打卡</span>
-                </button>
-            </div>
-        </div>
-
-        <div class="flex flex-wrap gap-4 items-center justify-between">
-            <button 
-                @click="showTaskModal = true" 
-                class="sketch-btn bg-sky-100 px-4 py-2.5 text-sm font-bold sketch-shadow-active">
-                📋 管理每个人日常默认任务清单
-            </button>
-            <div class="text-xs text-gray-400 italic">
-                * 每天零点系统会自动备份进度，并将所有子任务清单一键重置为红色 🔴 未开始，个人备注将被继续保留。
-            </div>
-        </div>
-    </header>
-
-    <!-- 每个人的专属大方框板块 (单行最大2列，完美直角，不晃眼动效) -->
-    <main class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-        <template x-for="m in members" :key="m.id">
-            <div 
-                class="bg-white sketch-border p-6 relative flex flex-col justify-between min-h-[400px] sketch-shadow transition-all duration-300">
-                
-                <!-- 卡片头部：头像 (直角框，不抖整张卡) -->
-                <div>
-                    <div class="flex justify-between items-start mb-4 border-b-2 border-dashed border-gray-300 pb-3">
-                        <div class="flex items-center gap-4">
-                            <!-- 过了18:30且有未完成任务，头像名字微微放大缩小的提醒 -->
-                            <div 
-                                @click="openAvatarPicker(m.id)"
-                                :class="{'pulse-remind': shouldPulse(m)}"
-                                class="w-16 h-16 bg-white sketch-border-sm cursor-pointer hover:scale-105 transition-all overflow-hidden flex items-center justify-center p-0.5 relative"
-                                title="点击上传照片或挑选可爱卡通手绘头像">
-                                <!-- 显示自定义图片头像 -->
-                                <template x-if="m.customAvatar">
-                                    <img :src="m.customAvatar" class="w-full h-full object-cover" />
-                                </template>
-                                <!-- 显示默认SVG矢量头像 -->
-                                <template x-if="!m.customAvatar">
-                                    <div class="w-full h-full" x-html="avatarsList[m.avatarIdx]"></div>
-                                </template>
-                            </div>
-                            
-                            <!-- 名字 -->
-                            <div :class="{'pulse-remind px-3 py-1': shouldPulse(m)}" class="transition-all duration-300">
-                                <input 
-                                    type="text" 
-                                    x-model="m.name" 
-                                    @blur="saveData(); logStateToHistoryOnDate(m, new Date().toISOString().split('T')[0])"
-                                    class="bg-transparent text-2xl font-black border-b border-dashed border-transparent hover:border-gray-400 focus:border-black focus:outline-none w-32 px-1"
-                                    title="修改姓名" />
-                                <div class="text-[10px] text-gray-400 mt-1">FEIYU 核心成员</div>
-                            </div>
-                        </div>
-
-                        <!-- 成员离退 -->
-                        <button 
-                            @click="removeMember(m.id)" 
-                            class="text-gray-300 hover:text-red-500 font-bold text-2xl px-2"
-                            title="清退此人">&times;</button>
-                    </div>
-
-                    <!-- 任务明细打标区：平直规整的线条，支持对每个任务单独改变颜色 -->
-                    <div class="my-4">
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-xs bg-gray-200 text-gray-700 px-2.5 py-1 font-bold">🎯 细分子任务进度：</span>
-                            <div class="flex gap-2">
-                                <button 
-                                    @click="resetToDefaultTasks(m)" 
-                                    class="text-[10px] bg-sky-50 text-sky-800 border border-sky-300 px-2 py-0.5 hover:bg-sky-100"
-                                    title="一键还原回默认模版">还原默认任务</button>
-                                <button 
-                                    @click="appendTask(m)" 
-                                    class="text-xs bg-emerald-100 hover:bg-emerald-200 border border-emerald-400 rounded-full w-5 h-5 flex items-center justify-center font-bold"
-                                    title="临时追加新任务">+</button>
-                            </div>
-                        </div>
-
-                        <!-- 子任务清单列表，颗粒度精准控制 -->
-                        <ul class="space-y-3 max-h-[220px] overflow-y-auto pr-1">
-                            <template x-for="task in m.tasks" :key="task.id">
-                                <li class="flex items-center justify-between gap-3 group text-sm py-2 px-1.5 border-b border-gray-100 hover:bg-stone-50">
-                                    
-                                    <!-- 任务内容 -->
-                                    <div class="flex-1 relative overflow-hidden">
-                                        <span 
-                                            :class="{
-                                                'line-through text-gray-400 font-light italic': task.state === 'green',
-                                                'font-semibold text-amber-700': task.state === 'orange',
-                                                'font-extrabold text-gray-800': task.state === 'red'
-                                            }"
-                                            x-text="task.text"></span>
-                                        <!-- 任务搞定后，画上手绘质感的直删除线 -->
-                                        <div x-show="task.state === 'green'" class="absolute top-2.5 left-0 right-0 h-0.5 bg-red-400/80" style="pointer-events:none;"></div>
-                                    </div>
-
-                                    <!-- 单项任务红橙绿微型控制按钮 -->
-                                    <div class="flex items-center gap-1 shrink-0">
-                                        <button 
-                                            @click="changeTaskState(m, task.id, 'red')"
-                                            :class="task.state === 'red' ? 'bg-red-500 scale-110 shadow-sm font-bold text-white' : 'bg-gray-100 hover:bg-red-100'"
-                                            class="w-5 h-5 flex items-center justify-center border border-gray-400 text-[10px] transition-all"
-                                            title="标记为未开始">
-                                            🔴
-                                        </button>
-                                        <button 
-                                            @click="changeTaskState(m, task.id, 'orange')"
-                                            :class="task.state === 'orange' ? 'bg-orange-500 scale-110 shadow-sm font-bold text-white' : 'bg-gray-100 hover:bg-orange-100'"
-                                            class="w-5 h-5 flex items-center justify-center border border-gray-400 text-[10px] transition-all"
-                                            title="标记为进行中">
-                                            🟠
-                                        </button>
-                                        <button 
-                                            @click="changeTaskState(m, task.id, 'green')"
-                                            :class="task.state === 'green' ? 'bg-green-500 scale-110 shadow-sm font-bold text-white' : 'bg-gray-100 hover:bg-green-100'"
-                                            class="w-5 h-5 flex items-center justify-center border border-gray-400 text-[10px] transition-all"
-                                            title="标记为已完成">
-                                            🟢
-                                        </button>
-                                        
-                                        <!-- 单项删除 -->
-                                        <button 
-                                            @click="deleteTask(m, task.id)" 
-                                            class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity text-base ml-2 font-bold"
-                                            title="删除此任务">&times;</button>
-                                    </div>
-                                </li>
-                            </template>
-                            <template x-if="m.tasks.length === 0">
-                                <div class="text-xs text-gray-400 italic py-2">暂无任务，请点击右上方添加任务。</div>
-                            </template>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- 打卡留言反馈区 -->
-                <div class="mt-2 pt-3 border-t border-dashed border-gray-200">
-                    <div class="relative bg-[#fbf9f5] p-2.5 sketch-border-sm">
-                        <span class="absolute -top-2.5 left-2 px-1 bg-white text-[9px] text-gray-400">📝 本日进度打卡与反馈：</span>
-                        <input 
-                            type="text" 
-                            x-model="m.remark"
-                            @blur="saveData(); logStateToHistoryOnDate(m, new Date().toISOString().split('T')[0])"
-                            placeholder="如：任务1已核对，任务2明天跟进" 
-                            class="bg-transparent w-full text-xs text-gray-700 placeholder-gray-400 focus:outline-none h-6 pt-0.5" />
-                    </div>
-                </div>
-            </div>
-        </template>
-
-        <!-- 一键添加新板子 -->
-        <button 
-            @click="addMember()"
-            class="sketch-border border-dashed border-gray-400 p-8 flex flex-col items-center justify-center min-h-[400px] bg-amber-50/10 hover:bg-amber-50/30 sketch-shadow cursor-pointer transition-all duration-150">
-            <span class="text-5xl text-gray-300 mb-3">➕</span>
-            <span class="text-lg font-extrabold text-gray-600">添加新成员看板方块</span>
-            <span class="text-xs text-gray-400 mt-2">点击分配全新空白工作席位</span>
-        </button>
-    </main>
-
-    <!-- 数据统计中心：可自主选择从哪年几月几日到几月几日 -->
-    <section class="bg-[#fdfaf2] p-6 sketch-border sketch-shadow mt-8">
-        <div class="flex flex-col lg:flex-row justify-between items-center mb-6 border-b-2 border-dashed border-gray-300 pb-5 gap-4">
-            <div>
-                <h2 class="text-2xl font-black flex items-center gap-1.5">
-                    📊 <span class="tracking-wide">FEIYU 看板多维总结汇总表</span>
-                </h2>
-                <p class="text-xs text-gray-400 mt-1">计算机制：绿色🟢计100%分，橙色🟠计50%分，红色🔴不计分。根据选定时间段内综合打卡平均分绘制手绘柱状图。</p>
-            </div>
-            
-            <!-- 精准日期范围筛选控制 -->
-            <div class="flex flex-wrap items-center bg-white p-3 sketch-border-sm gap-2">
-                <div class="flex items-center gap-1.5">
-                    <label class="text-xs font-black text-gray-600">统计起止时间: </label>
-                    <input 
-                        type="date" 
-                        x-model="startDate" 
-                        class="text-xs p-1 bg-stone-50 border border-gray-300 focus:outline-none font-bold" />
-                </div>
-                <span class="text-xs font-bold text-gray-400">至</span>
-                <div class="flex items-center gap-1.5">
-                    <input 
-                        type="date" 
-                        x-model="endDate" 
-                        class="text-xs p-1 bg-stone-50 border border-gray-300 focus:outline-none font-bold" />
-                </div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- 1. 规整的平直手绘柱状图 -->
-            <div>
-                <h3 class="text-base font-black mb-3 text-gray-700 flex items-center gap-1">
-                    📌 <span>选定周期全员综合完成度排名</span>
-                </h3>
-                
-                <div class="bg-white p-5 sketch-border-sm min-h-[260px] flex flex-col justify-between">
-                    <div class="space-y-4">
-                        <template x-for="item in calculateStats()" :key="item.name">
-                            <div>
-                                <div class="flex justify-between text-xs font-extrabold mb-1.5">
-                                    <span x-text="item.name"></span>
-                                    <span class="handwritten-num text-sm text-gray-600" x-text="item.rate + '% (有效统计天数: ' + item.days + '天)'"></span>
-                                </div>
-                                <div class="w-full bg-gray-100 h-6 border-2 border-[#2b2b2b] overflow-hidden relative">
-                                    <!-- 直角手绘填充条 -->
-                                    <div 
-                                        :style="'width: ' + item.rate + '%'"
-                                        class="bg-emerald-300 h-full transition-all duration-500">
-                                    </div>
-                                    <div class="absolute inset-0 bg-[linear-gradient(45deg,rgba(0,0,0,0.015)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.015)_50%,rgba(0,0,0,0.015)_75%,transparent_75%,transparent)] bg-[length:10px_10px]" style="pointer-events: none;"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                    
-                    <div class="mt-4 pt-3 border-t border-dashed border-gray-200 flex justify-between text-[11px] text-gray-400">
-                        <span>💡 数据会随上方选取的年月日而智能动态重绘</span>
-                        <span>直方图汇总</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 2. 日志留言记录本（新版倒序排序，最新打卡排在最前） -->
-            <div>
-                <h3 class="text-base font-black mb-3 text-gray-700">📜 历史打卡留言与进度反馈本</h3>
-                <div class="bg-white p-5 sketch-border-sm max-h-[260px] overflow-y-auto space-y-4">
-                    <template x-for="item in calculateStats()" :key="item.name">
-                        <div class="border-b border-dashed border-gray-200 pb-3">
-                            <div class="flex justify-between items-center mb-1.5">
-                                <span class="text-sm font-black text-gray-800" x-text="item.name"></span>
-                                <span class="text-xs text-gray-400" x-text="'累计条数: ' + item.remarks.length"></span>
-                            </div>
-                            
-                            <div class="space-y-1.5 pl-2.5 border-l-2 border-amber-400">
-                                <template x-for="r in item.remarks" :key="r.date">
-                                    <div class="text-xs flex justify-between items-center py-1">
-                                        <span class="text-gray-600 truncate max-w-[80%]">
-                                            <span class="handwritten-num text-[11px] text-gray-400" x-text="r.date + ': '"></span>
-                                            <span x-text="r.text"></span>
-                                        </span>
-                                        <span class="text-[10px] bg-emerald-50 text-emerald-800 px-1.5 py-0.5 border border-emerald-300 font-extrabold" x-text="r.rate + '% 完成度'"></span>
-                                    </div>
-                                </template>
-                                <template x-if="item.remarks.length === 0">
-                                    <div class="text-xs text-gray-400 italic">在此期间内暂无历史留言。</div>
-                                </template>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 更换头像库弹窗 (10款精致纯手绘头像 + 📷 自定义照片上传) -->
-    <div 
-        x-show="showAvatarModal" 
-        class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-        x-cloak>
-        <div class="bg-[#faf6f0] sketch-border p-6 max-w-md w-full sketch-shadow" @click.away="showAvatarModal = false">
-            <h3 class="text-lg font-black mb-4 flex justify-between items-center border-b border-gray-300 pb-3">
-                <span>🎨 更换个人头像</span>
-                <button @click="showAvatarModal = false" class="text-2xl font-bold hover:text-red-500">&times;</button>
-            </h3>
-
-            <!-- 上传本地图片 -->
-            <div class="mb-5 bg-white p-4 sketch-border-sm text-center">
-                <span class="block text-xs font-bold text-gray-500 mb-2">📸 支持上传你的个人真实美照/头像图片：</span>
-                <label class="sketch-btn bg-indigo-100 hover:bg-indigo-200 text-xs px-4 py-2 font-bold cursor-pointer inline-block sketch-shadow-active">
-                    <span>📤 选择本地图片上传</span>
-                    <input type="file" accept="image/*" @change="uploadCustomAvatar($event)" class="hidden" />
-                </label>
-            </div>
-
-            <span class="block text-xs font-bold text-gray-500 mb-2 text-center">--- 或者从手绘小动物中挑选一个 ---</span>
-
-            <!-- 手绘小动物选项 -->
-            <div class="grid grid-cols-5 gap-3 mb-5">
-                <template x-for="(svg, idx) in avatarsList" :key="idx">
-                    <div 
-                        @click="selectAvatar(idx)"
-                        class="aspect-square bg-white hover:bg-amber-50 border-2 border-[#2b2b2b] cursor-pointer p-0.5 hover:scale-105 transition-transform flex items-center justify-center"
-                        x-html="svg">
-                    </div>
-                </template>
-            </div>
-            <p class="text-[11px] text-gray-400 text-center">小提示：上传照片会自动由系统压缩裁剪，完全不占用手机存储哦！</p>
-        </div>
-    </div>
-
-    <!-- 默认日常模板配置弹窗 -->
-    <div 
-        x-show="showTaskModal" 
-        class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-        x-cloak>
-        <div class="bg-[#faf6f0] sketch-border p-6 max-w-xl w-full sketch-shadow max-h-[85vh] overflow-y-auto" @click.away="showTaskModal = false">
-            <h3 class="text-lg font-black mb-4 flex justify-between items-center border-b border-gray-300 pb-3">
-                <span>📋 配置全员默认日常任务清单 (修改后保存同步)</span>
-                <button @click="showTaskModal = false" class="text-2xl font-bold hover:text-red-500">&times;</button>
-            </h3>
-            
-            <p class="text-xs text-gray-500 mb-4 leading-relaxed">请在下方文本框中输入常规的子工作任务（每行代表一个任务）。保存后，**系统会自动保留原有同名任务的打标色，同时为今天的任务清单添加新修改！**</p>
-            
-            <div class="space-y-4 mb-5">
-                <template x-for="m in members" :key="m.id">
-                    <div class="p-4 bg-white border border-[#2b2b2b]">
-                        <div class="flex items-center gap-3 mb-2.5">
-                            <div class="w-10 h-10 border border-[#2b2b2b]" x-html="avatarsList[m.avatarIdx]"></div>
-                            <span class="font-extrabold text-base" x-text="m.name"></span>
-                            <span class="text-xs text-gray-400">日常模版列表：</span>
-                        </div>
-                        <textarea 
-                            @input="updateDefaultTasks(m, $event.target.value)"
-                            x-text="getTasksTextAreaValue(m)"
-                            rows="3"
-                            class="w-full text-xs bg-stone-50 border border-gray-300 focus:border-black focus:outline-none p-2.5 font-semibold"
-                            placeholder="每行输入一个日常任务，如：
-核对今日销售合同
-排版微信宣传文案"></textarea>
-                    </div>
-                </template>
-            </div>
-
-            <div class="flex justify-end gap-3 border-t border-gray-200 pt-3">
-                <button 
-                    @click="showTaskModal = false" 
-                    class="sketch-btn bg-emerald-100 px-6 py-2 text-xs font-bold sketch-shadow-active">
-                    保存更改并关闭
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 替代自带 Alert 弹窗 -->
-    <div x-show="customAlert.show" class="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50" x-cloak>
-        <div class="bg-[#faf6f0] sketch-border p-6 max-w-xs w-full sketch-shadow text-center">
-            <h4 class="text-sm font-black mb-2 text-gray-800" x-text="customAlert.title"></h4>
-            <p class="text-xs text-gray-600 mb-5 leading-relaxed" x-text="customAlert.message"></p>
-            <button @click="customAlert.show = false" class="sketch-btn bg-emerald-100 px-6 py-1.5 text-xs font-bold sketch-shadow-active">确认了解</button>
-        </div>
-    </div>
-
-    <!-- 替代自带 Confirm 确认弹窗 -->
-    <div x-show="customConfirm.show" class="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50" x-cloak>
-        <div class="bg-[#faf6f0] sketch-border p-6 max-w-xs w-full sketch-shadow text-center">
-            <h4 class="text-sm font-black mb-2 text-gray-800" x-text="customConfirm.title"></h4>
-            <p class="text-xs text-gray-600 mb-5 leading-relaxed" x-text="customConfirm.message"></p>
-            <div class="flex justify-center gap-3">
-                <button @click="customConfirm.show = false" class="sketch-btn bg-gray-200 px-5 py-1.5 text-xs font-bold sketch-shadow-active">取消</button>
-                <button @click="customConfirm.show = false; customConfirm.action()" class="sketch-btn bg-rose-200 px-5 py-1.5 text-xs font-bold sketch-shadow-active">确认</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 页脚 -->
-    <footer class="mt-12 text-center text-[11px] text-gray-400 border-t border-dashed border-gray-300 pt-5">
-        <p>🎨 FEIYU天天向上极简管理看板 | 🚀 零服务器支出、极速安全的高性能网页协作工具</p>
-    </footer>
-
 </body>
 </html>
+```eof
