@@ -1,157 +1,800 @@
+<!-- 
+=========================================================================
+📌 【Supabase 粘贴配置指引】
+   如果您需要配置 Supabase 联机功能，请直接用记事本打开此文件，
+   按键盘 Ctrl + F 键，搜索 "SUPABASE_URL" 就能瞬间定位到配置行！
+   
+   具体配置在下方代码的第 185 行左右（就在 <script> 标签刚开始的地方）：
+   
+   const SUPABASE_URL = "您的 Supabase 项目 URL 地址";
+   const SUPABASE_KEY = "您的 Supabase Anon API Key";
+=========================================================================
+-->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FEIYU天天向上团队看板</title>
+    <title>FEIYU天天向上</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
-    
-    <script>
-        // 在这里填入你的 Supabase 配置（如不使用云端，请留空，系统会自动切换本地模式）
-        const MY_SUPABASE_URL = https://wyicdosflniljzsaduaz.supabase.co/rest/v1/;
-        const MY_SUPABASE_KEY = sb_publishable_YRM7T9eLC2Qqf7kAO265mQ_IQ-YC-j4;
-    </script>
-
     <style>
-        body { background-color: #faf6f0; font-family: 'ZCOOL KuaiLe', sans-serif; color: #2b2b2b; }
-        .sketch-border { border: 3px solid #2b2b2b; }
-        .sketch-shadow { box-shadow: 6px 6px 0px rgba(43, 43, 43, 1); }
-        .pulse-remind { animation: strong-breath 1.5s infinite ease-in-out; border: 4px solid #ef4444 !important; }
-        @keyframes strong-breath {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0px rgba(239, 68, 68, 0); }
-            50% { transform: scale(1.05); box-shadow: 0 0 20px 10px rgba(239, 68, 68, 0.6); }
+        /* 引入圆润清晰的英文字体 Nunito，中文字体优先使用系统楷体 */
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Nunito', 'Kaiti', 'STKaiti', 'KaiTi_GB2312', sans-serif;
+            /* 需求：大背景改成浅黄色 */
+            background-color: #fef9ec;
+            color: #333;
+        }
+
+        /* 直线极简边框 */
+        .sketch-border {
+            border: 2px solid #2d3748;
+            border-radius: 8px;
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.05);
+        }
+        
+        .sketch-border-sm {
+            border: 2px solid #2d3748;
+            border-radius: 6px;
+        }
+
+        /* 按钮交互 */
+        .sketch-btn {
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .sketch-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.1);
+        }
+        .sketch-btn:active {
+            transform: translateY(1px);
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
+        }
+
+        /* 催办动画：仅头像和名字微微呼吸放大 */
+        @keyframes pulsing-alert {
+            0%, 100% { transform: scale(1); color: inherit; }
+            50% { transform: scale(1.08); color: #ef4444; }
+        }
+        .pulsing-alert {
+            animation: pulsing-alert 1.5s ease-in-out infinite;
+            transform-origin: left center;
+        }
+
+        /* 任务颜色类 */
+        .task-bg-red { background-color: #FEE2E2; }
+        .task-bg-orange { background-color: #FEF3C7; }
+        .task-bg-green { background-color: #D1FAE5; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        .task-done {
+            text-decoration: line-through;
+            text-decoration-thickness: 2px;
+            text-decoration-color: #2d3748;
+            opacity: 0.6;
         }
     </style>
 </head>
-<body x-data="trackerApp()" x-init="initApp()" class="p-4 md:p-8 min-h-screen">
+<body class="min-h-screen p-4 md:p-8 flex flex-col">
 
-    <header class="mb-8">
-        <div class="flex justify-between items-center bg-[#fdfaf2] p-6 sketch-border sketch-shadow">
-            <h1 class="text-3xl font-black">🚀 FEIYU天天向上团队看板</h1>
-            <div x-text="currentTime" class="font-bold text-xl"></div>
+    <!-- 顶部导航条 - 需求：大底色不那么白，标题背景加个活泼颜色 -->
+    <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-amber-100 p-4 sketch-border">
+        <div class="flex items-center gap-4 flex-wrap justify-center">
+            <h1 class="text-3xl md:text-4xl font-bold tracking-wider text-gray-800">💪 FEIYU天天向上</h1>
+            <span id="current-time" class="text-base md:text-lg font-bold sketch-border-sm px-3 py-1 bg-yellow-50 text-amber-900">
+                加载时间...
+            </span>
+        </div>
+        <div class="flex flex-wrap gap-3 justify-center">
+            <button onclick="openStatsModal()" class="sketch-border sketch-btn bg-white px-4 py-2 font-bold hover:bg-yellow-50">📊 详细统计与筛选</button>
+            <button onclick="openTaskModal()" class="sketch-border sketch-btn bg-indigo-100 px-4 py-2 font-bold hover:bg-indigo-200">📝 管理任务库</button>
         </div>
     </header>
 
-    <main class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-        <template x-for="m in members" :key="m.id">
-            <div class="bg-white sketch-border p-6 sketch-shadow flex flex-col" :class="shouldPulse(m) ? 'pulse-remind' : ''">
-                <!-- 头部：头像与姓名 -->
-                <div class="flex items-center gap-4 mb-4">
-                    <div @click="openAvatarModal(m.id)" class="w-16 h-16 border-2 border-[#2b2b2b] cursor-pointer overflow-hidden">
-                        <img v-if="m.customAvatar" :src="m.customAvatar" class="w-full h-full object-cover">
-                        <div v-else class="w-full h-full bg-gray-200"></div>
-                    </div>
-                    <h2 class="text-2xl font-black" x-text="m.name"></h2>
-                </div>
-
-                <!-- 任务清单 -->
-                <ul class="space-y-2 mb-4 flex-grow">
-                    <template x-for="task in m.tasks" :key="task.id">
-                        <li class="flex items-center justify-between p-2 border-b border-gray-100">
-                            <span x-text="task.text" :class="task.state === 'green' ? 'line-through text-gray-400' : ''"></span>
-                            <div class="flex gap-1">
-                                <button @click="changeTaskState(m, task.id, 'red')" class="w-6 h-6 bg-red-200"></button>
-                                <button @click="changeTaskState(m, task.id, 'orange')" class="w-6 h-6 bg-orange-200"></button>
-                                <button @click="changeTaskState(m, task.id, 'green')" class="w-6 h-6 bg-green-200"></button>
-                            </div>
-                        </li>
-                    </template>
-                </ul>
-
-                <!-- 备注 -->
-                <div class="mt-4">
-                    <label class="text-xs font-bold block mb-1">今日备注：</label>
-                    <input type="text" x-model="m.remark" @blur="saveData()" class="w-full p-2 border sketch-border" placeholder="记录进度...">
-                </div>
-            </div>
-        </template>
+    <!-- 看板主区域 -->
+    <main id="board-view" class="flex-1">
+        <div id="card-container" class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+            <!-- 卡片由JS动态渲染 -->
+        </div>
     </main>
 
-    <!-- 历史数据 -->
-    <section class="bg-white p-6 sketch-border sketch-shadow">
-        <h2 class="text-xl font-black mb-4">📜 历史进度概览</h2>
-        <template x-for="item in history" :key="item.date">
-            <div class="p-2 border-b text-sm">
-                <span x-text="item.date"></span>: <span x-text="item.remark"></span>
+    <!-- 底部常驻数据统计与历史动态 -->
+    <footer class="mt-8 pt-8 border-t-2 border-gray-300 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- 底部数据统计表 - 需求：可以自主选择筛选日期，不单单展示7天 -->
+        <div class="sketch-border bg-[#fffdf5] p-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+                <h2 class="text-2xl font-bold">📊 数据统计与完成率概览</h2>
+                <!-- 底部直接显示筛选输入 -->
+                <div class="flex flex-wrap items-center gap-1.5 bg-yellow-50/60 p-1.5 sketch-border-sm text-xs">
+                    <input type="date" id="bottom-stat-start" class="sketch-border-sm px-1.5 py-0.5 bg-white scale-90 md:scale-100">
+                    <span>至</span>
+                    <input type="date" id="bottom-stat-end" class="sketch-border-sm px-1.5 py-0.5 bg-white scale-90 md:scale-100">
+                    <button onclick="renderBottomStats()" class="sketch-border-sm sketch-btn px-2 py-0.5 bg-blue-100 font-bold">查询</button>
+                    <button onclick="setBottomQuickDate('week')" class="sketch-border-sm px-2 py-0.5 bg-white hover:bg-gray-100">本周</button>
+                    <button onclick="setBottomQuickDate('month')" class="sketch-border-sm px-2 py-0.5 bg-white hover:bg-gray-100">30天</button>
+                </div>
             </div>
-        </template>
-    </section>
+            <div id="bottom-chart-container" class="flex items-end justify-around h-48 border-b-2 border-l-2 border-gray-800 pb-2 pl-2 relative bg-white/50 rounded p-2">
+                <!-- 柱状图 -->
+            </div>
+        </div>
 
-    <!-- 头像弹窗 -->
-    <div x-show="avatarModalOpen" class="fixed inset-0 bg-black/50 flex items-center justify-center">
-        <div class="bg-white p-6 sketch-border">
-            <h3 class="font-bold mb-4">更换头像</h3>
-            <input type="file" @change="uploadAvatar($event)" accept="image/*">
-            <button @click="avatarModalOpen=false" class="mt-4 block bg-gray-200 px-4 py-2">关闭</button>
+        <!-- 历史打卡日志 -->
+        <div class="sketch-border bg-[#fffdf5] p-6">
+            <h2 class="text-2xl font-bold mb-6">📜 团队实时动态 (历史打卡与备注)</h2>
+            <div id="action-history" class="h-48 overflow-y-auto flex flex-col gap-3 pr-2">
+                <!-- 日志由JS渲染 -->
+            </div>
+        </div>
+    </footer>
+
+    <!-- 数据统计弹窗 -->
+    <div id="stats-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center z-50">
+        <div class="sketch-border bg-[#fffdf5] p-6 max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto relative">
+            <button onclick="closeStatsModal()" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 font-bold text-2xl">✖</button>
+            
+            <h2 class="text-2xl font-bold mb-6">数据统计报表 (按日全清算完成率)</h2>
+            
+            <div class="flex flex-wrap items-center gap-2 bg-yellow-50 p-2 sketch-border-sm mb-6 w-max">
+                <span class="font-bold text-sm">时间范围:</span>
+                <input type="date" id="stat-start" class="sketch-border-sm px-2 py-1 bg-white text-sm">
+                <span class="text-sm">至</span>
+                <input type="date" id="stat-end" class="sketch-border-sm px-2 py-1 bg-white text-sm">
+                <button onclick="renderStats()" class="sketch-border-sm sketch-btn px-3 py-1 bg-blue-100 font-bold ml-2">查询</button>
+                <button onclick="setQuickDate('week')" class="sketch-border-sm px-3 py-1 bg-white hover:bg-gray-100 ml-4">本周</button>
+                <button onclick="setQuickDate('month')" class="sketch-border-sm px-3 py-1 bg-white hover:bg-gray-100">近30天</button>
+            </div>
+            
+            <div id="modal-chart-container" class="flex items-end justify-around h-64 border-b-2 border-l-2 border-gray-800 pb-2 pl-2 mb-8 relative bg-white/50 rounded p-2">
+                <!-- 柱状图 -->
+            </div>
+            
+            <div>
+                <h3 class="text-xl font-bold mb-4">该时段内的详细备注</h3>
+                <div id="modal-history-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto p-2 sketch-border bg-gray-50">
+                    <!-- 备注记录 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 头像选择弹窗 -->
+    <div id="avatar-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center z-50">
+        <div class="sketch-border bg-[#fffdf5] p-6 max-w-lg w-full mx-4">
+            <h2 class="text-xl font-bold mb-4">选择手绘头像</h2>
+            <div id="avatar-grid" class="grid grid-cols-4 sm:grid-cols-5 gap-3 mb-6">
+                <!-- 头像由JS渲染 -->
+            </div>
+            <div class="flex justify-between items-center pt-4 border-t-2 border-gray-200">
+                <div>
+                    <input type="file" id="avatar-upload" class="hidden" accept="image/*" onchange="handleAvatarUpload(event)">
+                    <button onclick="document.getElementById('avatar-upload').click()" class="sketch-border sketch-btn px-4 py-2 bg-blue-100 font-bold text-blue-800">📸 上传自定义图片</button>
+                </div>
+                <button onclick="closeAvatarModal()" class="sketch-border sketch-btn px-4 py-2 bg-gray-200 font-bold">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务库管理弹窗 -->
+    <div id="task-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center z-50">
+        <div class="sketch-border bg-[#fffdf5] p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">默认任务库管理 (每行一个任务)</h2>
+                <button onclick="closeTaskModal()" class="text-gray-500 hover:text-black font-bold text-xl">✖</button>
+            </div>
+            <div id="task-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <!-- 任务列表由JS渲染 -->
+            </div>
+            <div class="flex gap-4 mt-6">
+                <button onclick="saveTaskModal(false)" class="sketch-border sketch-btn px-4 py-3 bg-gray-100 flex-1 font-bold text-gray-700">仅保存默认任务库</button>
+                <button onclick="saveTaskModal(true)" class="sketch-border sketch-btn px-4 py-3 bg-green-200 flex-1 font-bold text-green-800">保存！并立即同步到今天看板</button>
+            </div>
         </div>
     </div>
 
     <script>
-        function trackerApp() {
-            return {
-                currentTime: new Date().toLocaleTimeString(),
-                members: [],
-                history: [],
-                avatarModalOpen: false,
-                currentMId: null,
+        // =========================================================================
+        // 💻 SUPABASE 云端同步配置区域 (第二阶段联机使用，若不使用请保持留空)
+        // =========================================================================
+        const SUPABASE_URL = "https://wyicdosflniljzsaduaz.supabase.co/rest/v1/"; // 请在此处双引号内填入您的 Supabase URL
+        const SUPABASE_KEY = "sb_publishable_YRM7T9eLC2Qqf7kAO265mQ_IQ-YC-j4"; // 请在此处双引号内填入您的 Supabase API Key (Anon Key)
+        // =========================================================================
 
-                initApp() {
-                    setInterval(() => this.currentTime = new Date().toLocaleTimeString(), 1000);
-                    this.loadData();
-                },
+        // --- 核心数据结构 ---
+        let TODAY = new Date().toISOString().split('T')[0]; 
+        let currentEditingMemberId = null;
 
-                loadData() {
-                    const localData = localStorage.getItem('feiyu_data');
-                    if (localData) {
-                        const parsed = JSON.parse(localData);
-                        this.members = parsed.members;
-                        this.history = parsed.history;
-                    } else {
-                        this.members = [
-                            { id: 1, name: 'SY', tasks: [{id:1, text:'任务1', state:'red'}], remark: '', customAvatar: '' },
-                            { id: 2, name: 'YCF', tasks: [{id:2, text:'任务2', state:'red'}], remark: '', customAvatar: '' }
-                        ];
+        // 彩色手绘风小动物 SVG
+        const AVATARS = [
+            // 1. 橘猫
+            `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="40" fill="#fbd38d" stroke="#2d3748" stroke-width="3"/><path d="M15 50 L10 15 L45 35 Z" fill="#fbd38d" stroke="#2d3748" stroke-width="3"/><path d="M85 50 L90 15 L55 35 Z" fill="#fbd38d" stroke="#2d3748" stroke-width="3"/><circle cx="35" cy="50" r="5" fill="#2d3748"/><circle cx="65" cy="50" r="5" fill="#2d3748"/><path d="M45 60 Q50 68 55 60" fill="none" stroke="#2d3748" stroke-width="3" stroke-linecap="round"/></svg>`,
+            // 2. 棕狗
+            `<svg viewBox="0 0 100 100"><rect x="20" y="30" width="60" height="55" rx="20" fill="#d69e2e" stroke="#2d3748" stroke-width="3"/><path d="M20 45 Q5 35 10 65 Q25 65 20 50" fill="#744210" stroke="#2d3748" stroke-width="3"/><path d="M80 45 Q95 35 90 65 Q75 65 80 50" fill="#744210" stroke="#2d3748" stroke-width="3"/><circle cx="40" cy="55" r="4" fill="#2d3748"/><circle cx="60" cy="55" r="4" fill="#2d3748"/><circle cx="50" cy="68" r="6" fill="#2d3748"/></svg>`,
+            // 3. 棕熊
+            `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="40" fill="#975a16" stroke="#2d3748" stroke-width="3"/><circle cx="25" cy="25" r="15" fill="#744210" stroke="#2d3748" stroke-width="3"/><circle cx="75" cy="25" r="15" fill="#744210" stroke="#2d3748" stroke-width="3"/><circle cx="40" cy="50" r="4" fill="#fff"/><circle cx="60" cy="50" r="4" fill="#fff"/><circle cx="50" cy="65" r="12" fill="#d69e2e" stroke="#2d3748" stroke-width="3"/><circle cx="50" cy="62" r="4" fill="#2d3748"/></svg>`,
+            // 4. 粉兔
+            `<svg viewBox="0 0 100 100"><ellipse cx="50" cy="65" rx="35" ry="30" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><ellipse cx="35" cy="25" rx="10" ry="30" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><ellipse cx="65" cy="25" rx="10" ry="30" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><circle cx="40" cy="60" r="4" fill="#2d3748"/><circle cx="60" cy="60" r="4" fill="#2d3748"/><path d="M50 70 L47 75 L53 75 Z" fill="#2d3748"/></svg>`,
+            // 5. 熊猫
+            `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="40" fill="#fff" stroke="#2d3748" stroke-width="3"/><circle cx="20" cy="25" r="15" fill="#2d3748"/><circle cx="80" cy="25" r="15" fill="#2d3748"/><ellipse cx="35" cy="50" rx="10" ry="14" fill="#2d3748"/><ellipse cx="65" cy="50" rx="10" ry="14" fill="#2d3748"/><circle cx="35" cy="48" r="3" fill="#fff"/><circle cx="65" cy="48" r="3" fill="#fff"/><circle cx="50" cy="65" r="4" fill="#2d3748"/></svg>`,
+            // 6. 狐狸
+            `<svg viewBox="0 0 100 100"><polygon points="50,90 10,40 30,20 50,45 70,20 90,40" fill="#ed8936" stroke="#2d3748" stroke-width="3"/><polygon points="50,90 30,55 50,45 70,55" fill="#fff"/><circle cx="40" cy="55" r="4" fill="#2d3748"/><circle cx="60" cy="55" r="4" fill="#2d3748"/><circle cx="50" cy="80" r="5" fill="#2d3748"/></svg>`,
+            // 7. 粉猪
+            `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="40" fill="#fed7e2" stroke="#2d3748" stroke-width="3"/><polygon points="20,40 10,15 40,25" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><polygon points="80,40 90,15 60,25" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><ellipse cx="50" cy="60" rx="15" ry="10" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><circle cx="45" cy="60" r="3" fill="#2d3748"/><circle cx="55" cy="60" r="3" fill="#2d3748"/><circle cx="35" cy="45" r="4" fill="#2d3748"/><circle cx="65" cy="45" r="4" fill="#2d3748"/></svg>`,
+            // 8. 青蛙
+            `<svg viewBox="0 0 100 100"><ellipse cx="50" cy="65" rx="45" ry="30" fill="#68d391" stroke="#2d3748" stroke-width="3"/><circle cx="30" cy="35" r="18" fill="#68d391" stroke="#2d3748" stroke-width="3"/><circle cx="70" cy="35" r="18" fill="#68d391" stroke="#2d3748" stroke-width="3"/><circle cx="30" cy="35" r="6" fill="#2d3748"/><circle cx="70" cy="35" r="6" fill="#2d3748"/><path d="M35 75 Q50 85 65 75" fill="none" stroke="#2d3748" stroke-width="4" stroke-linecap="round"/></svg>`,
+            // 9. 企鹅
+            `<svg viewBox="0 0 100 100"><ellipse cx="50" cy="55" rx="35" ry="40" fill="#2a4365" stroke="#2d3748" stroke-width="3"/><path d="M30 45 Q50 20 70 45 Q50 65 30 45" fill="#fff"/><circle cx="40" cy="45" r="4" fill="#2d3748"/><circle cx="60" cy="45" r="4" fill="#2d3748"/><path d="M45 55 L55 55 L50 65 Z" fill="#ecc94b" stroke="#2d3748" stroke-width="2"/></svg>`,
+            // 10. 小黄鸡
+            `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="35" fill="#faf089" stroke="#2d3748" stroke-width="3"/><path d="M45 20 L50 10 L55 20 Z" fill="#f6ad55" stroke="#2d3748" stroke-width="2"/><circle cx="40" cy="50" r="4" fill="#2d3748"/><circle cx="60" cy="50" r="4" fill="#2d3748"/><path d="M45 60 L55 60 L50 70 Z" fill="#f6ad55" stroke="#2d3748" stroke-width="2"/></svg>`
+        ];
+
+        const DEFAULT_MEMBERS = [
+            { id: 'm1', name: 'SY', avatarId: 0, defaultTasks: ['需求分析', '原型设计更新'] },
+            { id: 'm2', name: 'YCF', avatarId: 1, defaultTasks: ['前端首页重构', '修复导航栏Bug'] },
+            { id: 'm3', name: 'LX', avatarId: 2, defaultTasks: ['后端API接口编写', '数据库表结构设计'] },
+            { id: 'm4', name: 'LYF', avatarId: 3, defaultTasks: ['测试核心主链路', '编写测试用例'] }
+        ];
+
+        let members = [];
+        let dailyRecords = {};
+        let actionHistory = [];
+
+        // --- 初始化与本地存储逻辑 ---
+        function initData() {
+            const savedMembers = localStorage.getItem('sketchBoard_members_v4');
+            const savedRecords = localStorage.getItem('sketchBoard_records_v4');
+            const savedHistory = localStorage.getItem('sketchBoard_history_v4');
+
+            if (savedMembers) members = JSON.parse(savedMembers);
+            else { members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS)); saveMembers(); }
+
+            if (savedRecords) dailyRecords = JSON.parse(savedRecords);
+            else dailyRecords = {};
+
+            if (savedHistory) actionHistory = JSON.parse(savedHistory);
+            else actionHistory = [];
+
+            // 每天零点自动重置，保留前一天的备注
+            if (!dailyRecords[TODAY]) {
+                dailyRecords[TODAY] = {};
+                
+                // 找到最近的有记录的一天，继承备注
+                const pastDates = Object.keys(dailyRecords).sort().reverse();
+                let lastDate = pastDates.length > 0 ? pastDates[0] : null;
+
+                members.forEach(m => {
+                    let prevRemark = '';
+                    if (lastDate && dailyRecords[lastDate][m.id]) {
+                        prevRemark = dailyRecords[lastDate][m.id].remark || '';
                     }
-                },
-
-                saveData() {
-                    localStorage.setItem('feiyu_data', JSON.stringify({ members: this.members, history: this.history }));
-                },
-
-                changeTaskState(m, tid, state) {
-                    const t = m.tasks.find(x => x.id === tid);
-                    if(t) t.state = state;
-                    this.saveData();
-                },
-
-                shouldPulse(m) {
-                    const now = new Date();
-                    const isLate = now.getHours() >= 18 && now.getMinutes() >= 30;
-                    return isLate && m.tasks.some(t => t.state !== 'green');
-                },
-
-                openAvatarModal(id) {
-                    this.currentMId = id;
-                    this.avatarModalOpen = true;
-                },
-
-                uploadAvatar(event) {
-                    const file = event.target.files[0];
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const m = this.members.find(x => x.id === this.currentMId);
-                        if(m) m.customAvatar = e.target.result;
-                        this.saveData();
-                        this.avatarModalOpen = false;
+                    dailyRecords[TODAY][m.id] = {
+                        tasks: m.defaultTasks.map(t => ({ text: t, status: 'red' })), 
+                        remark: prevRemark 
                     };
-                    reader.readAsDataURL(file);
+                });
+                saveRecords();
+            }
+            
+            // 初始化两个区域的时间筛选值
+            setQuickDate('week'); 
+            setBottomQuickDate('week');
+            renderHistoryLog();
+        }
+
+        function saveMembers() { localStorage.setItem('sketchBoard_members_v4', JSON.stringify(members)); }
+        function saveRecords() { localStorage.setItem('sketchBoard_records_v4', JSON.stringify(dailyRecords)); }
+        function saveHistory() { localStorage.setItem('sketchBoard_history_v4', JSON.stringify(actionHistory)); }
+
+        // 获取头像 HTML (处理内置 SVG 和 自定义上传图片)
+        function getAvatarHTML(member) {
+            if (member.customAvatar) {
+                return `<img src="${member.customAvatar}" class="w-full h-full object-cover rounded-full sketch-border-sm" alt="avatar" />`;
+            }
+            return AVATARS[member.avatarId];
+        }
+
+        // 记录动态历史
+        function logAction(memberId, actionText) {
+            const member = members.find(m => m.id === memberId);
+            if (!member) return;
+            
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            
+            actionHistory.unshift({
+                id: Date.now(),
+                date: TODAY,
+                time: timeStr,
+                memberName: member.name,
+                avatarHtml: getAvatarHTML(member),
+                text: actionText
+            });
+
+            // 保留最近 50 条
+            if(actionHistory.length > 50) actionHistory.pop();
+            
+            saveHistory();
+            renderHistoryLog();
+        }
+
+        // --- 渲染逻辑 ---
+        function renderBoard() {
+            const container = document.getElementById('card-container');
+            container.innerHTML = '';
+            const todayData = dailyRecords[TODAY];
+
+            const currentHour = new Date().getHours();
+            const isLate = currentHour >= 18; // 晚上6点后未完成开始呼吸提醒
+
+            members.forEach(member => {
+                const data = todayData[member.id] || { tasks: [], remark: '' };
+                
+                const hasIncompleteTasks = data.tasks.some(t => t.status === 'red' || t.status === 'orange');
+                const allDone = data.tasks.length > 0 && data.tasks.every(t => t.status === 'green');
+                const alertClass = (isLate && hasIncompleteTasks) ? 'pulsing-alert' : '';
+                const remarkOpacity = allDone ? 'opacity-60' : 'opacity-100';
+
+                const tasksHTML = data.tasks.map((t, idx) => {
+                    const bgClass = t.status === 'red' ? 'task-bg-red' : (t.status === 'orange' ? 'task-bg-orange' : 'task-bg-green');
+                    const doneClass = t.status === 'green' ? 'task-done' : '';
+                    
+                    return `
+                    <div class="flex items-center gap-3 mb-3 group sketch-border-sm p-2 ${bgClass} transition-colors">
+                        <div class="flex gap-1 shrink-0 bg-white p-1 sketch-border-sm rounded-full">
+                            <button onclick="setTaskStatus('${member.id}', ${idx}, 'red')" class="w-4 h-4 rounded-full border-2 border-gray-800 ${t.status === 'red' ? 'bg-red-500 shadow-inner' : 'bg-white hover:bg-red-100'}" title="未开始"></button>
+                            <button onclick="setTaskStatus('${member.id}', ${idx}, 'orange')" class="w-4 h-4 rounded-full border-2 border-gray-800 ${t.status === 'orange' ? 'bg-orange-500 shadow-inner' : 'bg-white hover:bg-orange-100'}" title="进行中"></button>
+                            <button onclick="setTaskStatus('${member.id}', ${idx}, 'green')" class="w-4 h-4 rounded-full border-2 border-gray-800 ${t.status === 'green' ? 'bg-green-500 shadow-inner' : 'bg-white hover:bg-green-100'}" title="已完成"></button>
+                        </div>
+                        <div class="flex-1 text-base font-bold ${doneClass} cursor-text break-all" ondblclick="editTodayTask('${member.id}', ${idx}, this)" title="双击修改文字">${t.text}</div>
+                        <button onclick="deleteTodayTask('${member.id}', ${idx})" class="text-lg text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="删除">✖</button>
+                    </div>
+                    `;
+                }).join('');
+
+                const cardHTML = `
+                    <div class="sketch-border bg-white p-6 flex flex-col gap-4 relative transition-colors duration-300 min-h-[350px]">
+                        <div class="flex items-center gap-4 ${alertClass}">
+                            <div class="w-16 h-16 cursor-pointer hover:scale-105 transition-transform select-none" onclick="openAvatarModal('${member.id}')" title="更换头像">
+                                ${getAvatarHTML(member)}
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="text-3xl font-bold tracking-wide">${member.name}</h3>
+                            </div>
+                        </div>
+                        
+                        <div class="flex-1 mt-2">
+                            <p class="text-sm text-gray-500 font-bold mb-3 border-b-2 border-gray-200 pb-1">🎯 今日任务明细:</p>
+                            <div class="min-h-[5rem]">
+                                ${tasksHTML || '<p class="text-gray-400 text-sm text-center py-4">今日暂无任务，快来添加吧！</p>'}
+                            </div>
+                            
+                            <div class="flex items-center gap-2 mt-2">
+                                <input type="text" id="add-task-input-${member.id}" class="flex-1 sketch-border-sm p-2 text-sm outline-none focus:bg-gray-50 transition-colors" placeholder="输入新任务..." onkeypress="if(event.key === 'Enter') addTodayTaskInline('${member.id}')">
+                                <button onclick="addTodayTaskInline('${member.id}')" class="text-sm sketch-border-sm px-3 py-2 bg-gray-100 hover:bg-gray-200 font-bold shrink-0">添加</button>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 ${remarkOpacity} transition-opacity bg-gray-50 p-3 sketch-border-sm">
+                            <p class="text-sm text-gray-500 font-bold mb-2">📝 个人进度备注:</p>
+                            <textarea class="w-full bg-transparent outline-none text-sm resize-none" 
+                                   rows="2"
+                                   placeholder="遇到问题？留给明天的自己..." 
+                                   onblur="updateRemark('${member.id}', this.value)"
+                                   onfocus="this.setAttribute('data-old', this.value)">${data.remark}</textarea>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHTML);
+            });
+        }
+
+        // --- 细化到每个任务的状态控制 ---
+        function setTaskStatus(memberId, taskIndex, newStatus) {
+            const task = dailyRecords[TODAY][memberId].tasks[taskIndex];
+            const oldStatus = task.status;
+            task.status = newStatus;
+            saveRecords();
+            renderBoard();
+
+            // 如果刚标记为已完成，记录动态
+            if (newStatus === 'green' && oldStatus !== 'green') {
+                logAction(memberId, `打卡完成: [${task.text}] ✅`);
+            }
+            
+            // 打卡状态更新时同时刷新底部和弹窗统计图表
+            renderBottomStats();
+            if(!document.getElementById('stats-modal').classList.contains('hidden')) {
+                renderStats();
+            }
+        }
+
+        function addTodayTaskInline(memberId) {
+            const inputEl = document.getElementById(`add-task-input-${memberId}`);
+            const text = inputEl.value.trim();
+            if (text) {
+                dailyRecords[TODAY][memberId].tasks.push({ text: text, status: 'red' });
+                saveRecords();
+                renderBoard();
+                inputEl.value = '';
+                logAction(memberId, `新增了临时任务: [${text}]`);
+                renderBottomStats();
+            }
+        }
+
+        function deleteTodayTask(memberId, taskIndex) {
+            dailyRecords[TODAY][memberId].tasks.splice(taskIndex, 1);
+            saveRecords();
+            renderBoard();
+            renderBottomStats();
+        }
+
+        function editTodayTask(memberId, taskIndex, element) {
+            const currentText = dailyRecords[TODAY][memberId].tasks[taskIndex].text;
+            element.outerHTML = `<input type="text" class="flex-1 sketch-border-sm bg-white p-1 text-base font-bold outline-none" value="${currentText}" onblur="saveTodayTaskText('${memberId}', ${taskIndex}, this)" onkeypress="if(event.key === 'Enter') this.blur()" autofocus>`;
+        }
+
+        function saveTodayTaskText(memberId, taskIndex, inputElement) {
+            const newText = inputElement.value.trim();
+            if (newText) {
+                dailyRecords[TODAY][memberId].tasks[taskIndex].text = newText;
+            } else {
+                dailyRecords[TODAY][memberId].tasks.splice(taskIndex, 1);
+            }
+            saveRecords();
+            renderBoard();
+        }
+
+        function updateRemark(memberId, newRemark) {
+            const textarea = event.target;
+            const oldRemark = textarea.getAttribute('data-old') || '';
+            
+            if(oldRemark !== newRemark) {
+                dailyRecords[TODAY][memberId].remark = newRemark;
+                saveRecords();
+                if(newRemark.trim() !== '') {
+                    logAction(memberId, `更新了备注: "${newRemark}"`);
                 }
             }
         }
+
+        // --- 头像管理与上传 ---
+        function openAvatarModal(memberId) {
+            currentEditingMemberId = memberId;
+            const grid = document.getElementById('avatar-grid');
+            grid.innerHTML = '';
+            AVATARS.forEach((svg, index) => {
+                grid.innerHTML += `
+                    <div class="p-2 sketch-border sketch-btn flex items-center justify-center cursor-pointer hover:bg-gray-100 bg-white" onclick="selectAvatar(${index})">
+                        <div class="w-16 h-16">${svg}</div>
+                    </div>
+                `;
+            });
+            document.getElementById('avatar-modal').classList.remove('hidden');
+        }
+
+        function closeAvatarModal() {
+            document.getElementById('avatar-modal').classList.add('hidden');
+            currentEditingMemberId = null;
+        }
+
+        // 统一选择头像
+        function selectAvatar(avatarId) {
+            if (currentEditingMemberId) {
+                const member = members.find(m => m.id === currentEditingMemberId);
+                if (member) {
+                    member.avatarId = avatarId;
+                    delete member.customAvatar; 
+                    saveMembers();
+                    renderBoard();
+                    renderHistoryLog(); 
+                }
+            }
+            closeAvatarModal();
+        }
+
+        // 上传自定义头像
+        function handleAvatarUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64Str = e.target.result;
+                    if (currentEditingMemberId) {
+                        const member = members.find(m => m.id === currentEditingMemberId);
+                        if (member) {
+                            member.customAvatar = base64Str;
+                            saveMembers();
+                            renderBoard();
+                            renderHistoryLog();
+                        }
+                    }
+                    closeAvatarModal();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // --- 任务库管理 ---
+        function openTaskModal() {
+            const list = document.getElementById('task-list');
+            list.innerHTML = '';
+            members.forEach(member => {
+                const tasksStr = member.defaultTasks.join('\n');
+                list.innerHTML += `
+                    <div class="flex flex-col gap-2 bg-gray-50 p-4 sketch-border-sm relative">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-10 h-10">${getAvatarHTML(member)}</div>
+                            <span class="font-bold text-xl">${member.name}</span>
+                        </div>
+                        <textarea class="w-full sketch-border-sm p-3 bg-white text-sm" rows="4" placeholder="输入默认任务，每行一个" onchange="updateDefaultTasks('${member.id}', this.value)">${tasksStr}</textarea>
+                        <button onclick="deleteMember('${member.id}')" class="absolute top-4 right-4 text-gray-400 hover:text-red-500 font-bold text-xl hover:scale-110">✖</button>
+                    </div>
+                `;
+            });
+            document.getElementById('task-modal').classList.remove('hidden');
+        }
+
+        function updateDefaultTasks(memberId, textValue) {
+            const member = members.find(m => m.id === memberId);
+            if (member) {
+                member.defaultTasks = textValue.split('\n').map(t => t.trim()).filter(t => t !== '');
+            }
+        }
+
+        function saveTaskModal(syncToToday) {
+            saveMembers();
+            if (syncToToday) {
+                members.forEach(m => {
+                    dailyRecords[TODAY][m.id].tasks = m.defaultTasks.map(t => ({ text: t, status: 'red' }));
+                });
+                saveRecords();
+            }
+            document.getElementById('task-modal').classList.add('hidden');
+            renderBoard();
+            renderBottomStats();
+        }
+
+        function closeTaskModal() {
+            initData(); // 取消则还原
+            document.getElementById('task-modal').classList.add('hidden');
+        }
+
+        function deleteMember(memberId) {
+            if(confirm("确定要删除这个成员吗？历史数据不受影响。")) {
+                members = members.filter(m => m.id !== memberId);
+                saveMembers();
+                openTaskModal(); 
+                renderBoard();
+                renderBottomStats();
+            }
+        }
+
+        // --- 实时时间与跨天 ---
+        function updateClock() {
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+            
+            // 跨天自动重置检测
+            if (todayStr !== TODAY) {
+                TODAY = todayStr;
+                initData(); 
+                renderBoard();
+            }
+
+            const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+            const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('current-time').innerText = `${dateStr} ${timeStr}`;
+            
+            renderBoard(); 
+        }
+
+        // --- 历史记录渲染 ---
+        function renderHistoryLog() {
+            const container = document.getElementById('action-history');
+            container.innerHTML = '';
+            if (actionHistory.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 text-sm mt-4">今天暂无任何动态...</p>';
+                return;
+            }
+            
+            actionHistory.forEach(log => {
+                const isToday = log.date === TODAY;
+                const dateLabel = isToday ? '今天' : log.date;
+                container.innerHTML += `
+                    <div class="flex gap-3 items-start p-2 bg-gray-50 sketch-border-sm">
+                        <div class="w-8 h-8 shrink-0">${log.avatarHtml}</div>
+                        <div class="flex-1">
+                            <div class="flex justify-between items-end">
+                                <span class="font-bold text-sm text-gray-800">${log.memberName}</span>
+                                <span class="text-xs text-gray-400">${dateLabel} ${log.time}</span>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-1">${log.text}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // --- 数据统计与筛选 ---
+        function openStatsModal() {
+            document.getElementById('stats-modal').classList.remove('hidden');
+            renderStats();
+        }
+
+        function closeStatsModal() {
+            document.getElementById('stats-modal').classList.add('hidden');
+        }
+
+        function setQuickDate(period) {
+            const endInput = document.getElementById('stat-end');
+            const startInput = document.getElementById('stat-start');
+            
+            const endDate = new Date();
+            const startDate = new Date();
+            
+            if (period === 'week') startDate.setDate(endDate.getDate() - 6);
+            else if (period === 'month') startDate.setDate(endDate.getDate() - 29);
+
+            endInput.value = endDate.toISOString().split('T')[0];
+            startInput.value = startDate.toISOString().split('T')[0];
+            
+            renderStats();
+        }
+
+        function setBottomQuickDate(period) {
+            const endInput = document.getElementById('bottom-stat-end');
+            const startInput = document.getElementById('bottom-stat-start');
+            
+            const endDate = new Date();
+            const startDate = new Date();
+            
+            if (period === 'week') startDate.setDate(endDate.getDate() - 6);
+            else if (period === 'month') startDate.setDate(endDate.getDate() - 29);
+
+            endInput.value = endDate.toISOString().split('T')[0];
+            startInput.value = startDate.toISOString().split('T')[0];
+            
+            renderBottomStats();
+        }
+
+        function getDatesInRange(startStr, endStr) {
+            const dates = [];
+            let current = new Date(startStr);
+            const end = new Date(endStr);
+            while (current <= end) {
+                dates.push(current.toISOString().split('T')[0]);
+                current.setDate(current.getDate() + 1);
+            }
+            return dates;
+        }
+
+        // 渲染弹窗版的高级数据统计
+        function renderStats() {
+            const modalChartContainer = document.getElementById('modal-chart-container');
+            const historyContainer = document.getElementById('modal-history-container');
+            
+            modalChartContainer.innerHTML = '';
+            historyContainer.innerHTML = '';
+
+            const startStr = document.getElementById('stat-start').value;
+            const endStr = document.getElementById('stat-end').value;
+            
+            if (!startStr || !endStr || new Date(startStr) > new Date(endStr)) {
+                modalChartContainer.innerHTML = '<p class="text-red-500 m-auto font-bold">请选择正确的时间范围！</p>';
+                return;
+            }
+
+            const dates = getDatesInRange(startStr, endStr);
+
+            members.forEach(member => {
+                let greenDays = 0;
+                let validDays = 0;
+                
+                dates.forEach(date => {
+                    if (dailyRecords[date] && dailyRecords[date][member.id]) {
+                        const record = dailyRecords[date][member.id];
+                        if (record.tasks && record.tasks.length > 0) {
+                            validDays++;
+                            if (record.tasks.every(t => t.status === 'green')) greenDays++;
+                        }
+                        
+                        if (record.remark && record.remark.trim() !== '') {
+                            historyContainer.innerHTML += `
+                                <div class="bg-white p-3 sketch-border-sm mb-2 text-sm">
+                                    <span class="font-bold text-gray-800">${member.name} (${date}):</span> 
+                                    <span class="text-gray-600">${record.remark}</span>
+                                </div>
+                            `;
+                        }
+                    }
+                });
+
+                const rate = validDays === 0 ? 0 : Math.round((greenDays / validDays) * 100);
+                const barHeight = rate === 0 ? 5 : (rate / 100) * 200;
+                
+                modalChartContainer.innerHTML += `
+                    <div class="flex flex-col items-center group relative w-12 md:w-16">
+                        <div class="absolute -top-8 bg-gray-800 text-white px-2 py-1 sketch-border-sm text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                            完成率: ${rate}%<br>(${greenDays}/${validDays}天)
+                        </div>
+                        <div class="w-6 md:w-8 sketch-border bg-[#D1FAE5] transition-all duration-700 relative overflow-hidden" style="height: ${barHeight}px;">
+                            <div class="absolute inset-0 opacity-30" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.1) 5px, rgba(0,0,0,0.1) 10px);"></div>
+                        </div>
+                        <div class="mt-2 text-2xl font-bold flex items-center justify-center w-8 h-8 md:w-10 md:h-10 select-none">
+                            ${getAvatarHTML(member)}
+                        </div>
+                        <span class="text-xs md:text-sm mt-1 font-bold truncate w-full text-center">${member.name}</span>
+                    </div>
+                `;
+            });
+
+            if (historyContainer.innerHTML === '') {
+                historyContainer.innerHTML = '<p class="text-gray-400 p-4">该时间段内暂无备注记录。</p>';
+            }
+        }
+
+        // 渲染底部常驻的数据统计，同样支持完整的日期范围筛选
+        function renderBottomStats() {
+            const bottomChartContainer = document.getElementById('bottom-chart-container');
+            bottomChartContainer.innerHTML = '';
+
+            const startStr = document.getElementById('bottom-stat-start').value;
+            const endStr = document.getElementById('bottom-stat-end').value;
+            
+            if (!startStr || !endStr || new Date(startStr) > new Date(endStr)) {
+                bottomChartContainer.innerHTML = '<p class="text-red-500 m-auto font-bold text-sm">请在右上方选择正确的时间范围！</p>';
+                return;
+            }
+
+            const dates = getDatesInRange(startStr, endStr);
+
+            members.forEach(member => {
+                let greenDays = 0;
+                let validDays = 0;
+                
+                dates.forEach(date => {
+                    if (dailyRecords[date] && dailyRecords[date][member.id]) {
+                        const record = dailyRecords[date][member.id];
+                        if (record.tasks && record.tasks.length > 0) {
+                            validDays++;
+                            if (record.tasks.every(t => t.status === 'green')) greenDays++;
+                        }
+                    }
+                });
+
+                const rate = validDays === 0 ? 0 : Math.round((greenDays / validDays) * 100);
+                const barHeight = rate === 0 ? 5 : (rate / 100) * 140; // 底部柱状图最高140px
+
+                bottomChartContainer.innerHTML += `
+                    <div class="flex flex-col items-center group relative w-12 md:w-16">
+                        <div class="absolute -top-8 bg-gray-800 text-white px-2 py-1 sketch-border-sm text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                            完成率: ${rate}%<br>(${greenDays}/${validDays}天)
+                        </div>
+                        <div class="w-6 md:w-8 sketch-border bg-[#D1FAE5] transition-all duration-700 relative overflow-hidden" style="height: ${barHeight}px;">
+                            <div class="absolute inset-0 opacity-30" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.1) 5px, rgba(0,0,0,0.1) 10px);"></div>
+                        </div>
+                        <div class="mt-2 text-2xl font-bold flex items-center justify-center w-8 h-8 md:w-10 md:h-10 select-none">
+                            ${getAvatarHTML(member)}
+                        </div>
+                        <span class="text-xs md:text-sm mt-1 font-bold truncate w-full text-center">${member.name}</span>
+                    </div>
+                `;
+            });
+        }
+
+        // --- 启动执行 ---
+        window.onload = () => {
+            initData();
+            updateClock(); 
+            setInterval(updateClock, 60000); 
+        };
+
     </script>
 </body>
 </html>
-```eof
