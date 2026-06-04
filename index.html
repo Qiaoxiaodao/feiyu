@@ -204,15 +204,22 @@
         // =========================================================================
         // 💻 【核心粘贴位置】SUPABASE 数据库密钥在这里填写！
         // =========================================================================
-        const SUPABASE_URL = "https://wyicdosflniljzsaduaz.supabase.co/rest/v1/"; 
+        const SUPABASE_URL = "https://wyicdosflniljzsaduaz.supabase.co"; 
         const SUPABASE_KEY = "sb_publishable_YRM7T9eLC2Qqf7kAO265mQ_IQ-YC-j4"; 
         // =========================================================================
 
         let supabaseClient = null;
-        let TODAY = new Date().toISOString().split('T')[0]; 
+        const BOARD_ID = 1;
+        const getTodayLocal = () => {
+            const d = new Date();
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+            return d.toISOString().split('T')[0];
+        };
+        let TODAY = getTodayLocal(); 
         let currentEditingMemberId = null;
         let isSyncingCloud = false;
         let cloudSyncTimer = null;
+        let realtimeChannel = null;
 
         // 手绘风小动物彩色 SVG
         const AVATARS = [
@@ -276,94 +283,129 @@
         // --- 初始化与本地存储/云端多端同步逻辑 ---
         async function initData() {
             const statusEl = document.getElementById('sync-status');
-            
-            // 1. 安全初始化客户端，彻底隔离加载顺序报错问题
+
+            // 避免重复点击“云端状态”后创建多个实时监听
+            if (realtimeChannel && supabaseClient) {
+                await supabaseClient.removeChannel(realtimeChannel);
+                realtimeChannel = null;
+            }
+
+            // 1. 初始化 Supabase 客户端
             try {
                 if (SUPABASE_URL && SUPABASE_KEY && window.supabase) {
-                    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                    // 注意：这里必须是项目 URL，不能带 /rest/v1/
+                    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+                        realtime: { params: { eventsPerSecond: 10 } }
+                    });
                 }
             } catch(err) {
                 console.error("Supabase 客户端初始化异常:", err);
+                supabaseClient = null;
             }
 
-            // 2. 默认加载本地缓存作为冷启动首屏数据
+            // 2. 本地缓存只作为离线兜底；云端连接成功后会被云端覆盖
             loadLocalBackup();
             if (members.length === 0) {
                 members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
+                dailyRecords = {};
+                actionHistory = [];
+                checkMidnightReset();
                 saveToLocalOnly();
             }
 
             if (supabaseClient) {
-                statusEl.innerText = '☁️ 正在建立安全握手...';
+                statusEl.innerText = '☁️ 正在连接云端...';
                 statusEl.className = "text-xs font-bold px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full ml-2";
-                
+
                 try {
-                    // 🚀 云端主存数据加载，并对云端有无有效表数据做原子判定
-                    const { data, error } = await supabaseClient.from('board_state').select('*').eq('id', 1).single();
-                    
-                    if (error && error.code !== 'PGRST116') {
-                        throw error;
-                    }
-                    
-                    if (data && data.members && data.members.length > 0) {
-                        // 🌈 云端握手并校验通过：强制使用最新的云端数据包覆盖本地
+                    // 先读取唯一一条看板数据
+                    const { data, error } = await supabaseClient
+                        .from('board_state')
+                        .select('id,members,dailyRecords,actionHistory,updated_at')
+                        .eq('id', BOARD_ID)
+                        .maybeSingle();
+
+                    if (error) throw error;
+
+                    if (data && Array.isArray(data.members) && data.members.length > 0) {
                         members = data.members;
                         dailyRecords = data.dailyRecords || {};
                         actionHistory = data.actionHistory || [];
-                        
-                        statusEl.innerText = '🟢 云端实时同步中';
-                        statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
-                        
-                        saveToLocalOnly(); // 本地进行镜像备份
                     } else {
-                        // 云端完全无有效快照：本机推送初始化主包至云端，激活共享通道
-                        dailyRecords = {};
+                        // 云端没有数据时，用当前本地/默认数据初始化云端
                         checkMidnightReset();
-                        await supabaseClient.from('board_state').upsert({ 
-                            id: 1, 
-                            members: members, 
-                            dailyRecords: dailyRecords, 
-                            actionHistory: actionHistory 
-                        });
-                        statusEl.innerText = '🟢 云端实时同步中';
-                        statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
+                        const { error: insertError } = await supabaseClient
+                            .from('board_state')
+                            .upsert({
+                                id: BOARD_ID,
+                                members,
+                                dailyRecords,
+                                actionHistory,
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'id' });
+
+                        if (insertError) throw insertError;
                     }
-                    
-                    // 🚀 核心修复：建立高可靠性的全局数据接收广播监听器
-                    supabaseClient.channel('board-sync-channel')
-                        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'board_state', filter: 'id=eq.1' }, (payload) => {
-                            if (isSyncingCloud) return; // 本机刚刚推上去的写通知，不做二次重绘处理，杜绝自发循环死锁
-                            
+
+                    checkMidnightReset();
+                    saveToLocalOnly();
+
+                    statusEl.innerText = '🟢 云端实时同步中';
+                    statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
+
+                    // 监听 INSERT / UPDATE / DELETE，其他设备一改，这边自动刷新
+                    realtimeChannel = supabaseClient
+                        .channel('board-sync-channel')
+                        .on('postgres_changes', {
+                            event: '*',
+                            schema: 'public',
+                            table: 'board_state',
+                            filter: `id=eq.${BOARD_ID}`
+                        }, (payload) => {
+                            if (isSyncingCloud) return;
+
                             const newData = payload.new;
-                            if (newData) {
-                                if (newData.members && newData.members.length > 0) members = newData.members;
-                                if (newData.dailyRecords) dailyRecords = newData.dailyRecords;
-                                if (newData.actionHistory) actionHistory = newData.actionHistory;
-                                
-                                checkMidnightReset(); 
-                                saveToLocalOnly();    
-                                renderBoard();
-                                renderBottomStats();
-                                renderHistoryLog();
-                            }
-                        }).subscribe((status) => {
-                            if (status !== 'SUBSCRIBED') {
-                                console.warn("实时广播频道激活失败: ", status);
+                            if (!newData) return;
+
+                            if (Array.isArray(newData.members) && newData.members.length > 0) members = newData.members;
+                            dailyRecords = newData.dailyRecords || {};
+                            actionHistory = newData.actionHistory || [];
+
+                            checkMidnightReset();
+                            saveToLocalOnly();
+                            renderBoard();
+                            renderBottomStats();
+                            renderHistoryLog();
+
+                            statusEl.innerText = '🟢 已收到其他设备更新';
+                            statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
+                        })
+                        .subscribe((status, err) => {
+                            if (status === 'SUBSCRIBED') {
+                                statusEl.innerText = '🟢 云端实时同步中';
+                                statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
+                            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                                console.warn("实时频道异常:", status, err);
+                                statusEl.innerText = '⚠️ 已连数据库，但实时监听未开';
+                                statusEl.className = "text-xs font-bold px-2 py-1 bg-orange-100 text-orange-700 rounded-full ml-2";
                             }
                         });
+
                 } catch (e) {
                     console.error("云端加载失败:", e);
-                    statusEl.innerText = '⚠️ 云端未响应(离线运行)';
+                    const msg = e?.message ? `：${e.message}` : '';
+                    statusEl.innerText = '⚠️ 云端未同步，点我重试';
                     statusEl.className = "text-xs font-bold px-2 py-1 bg-red-100 text-red-700 rounded-full ml-2";
+                    showCustomAlert(`云端连接失败${msg}\n\n请检查：1）Supabase URL 是否不带 /rest/v1/；2）board_state 表是否存在；3）RLS 策略是否允许读取和写入；4）Realtime 是否已开启。`);
                 }
             } else {
-                statusEl.innerText = '☁️ 离线模式(请填写配置Key)';
+                statusEl.innerText = '☁️ 离线模式：Supabase 未初始化';
                 statusEl.className = "text-xs font-bold px-2 py-1 bg-gray-200 text-gray-700 rounded-full ml-2";
             }
 
             checkMidnightReset();
-            
-            setQuickDate('week'); 
+
+            setQuickDate('week');
             setBottomQuickDate('week');
             renderHistoryLog();
             renderBoard();
@@ -387,9 +429,9 @@
         // 跨天自动重置，保留前一天的备注
         function checkMidnightReset() {
             if (!dailyRecords[TODAY]) {
-                dailyRecords[TODAY] = {};
-                const pastDates = Object.keys(dailyRecords).sort().reverse();
+                const pastDates = Object.keys(dailyRecords).filter(d => d !== TODAY).sort().reverse();
                 let lastDate = pastDates.length > 0 ? pastDates[0] : null;
+                dailyRecords[TODAY] = {};
 
                 members.forEach(m => {
                     let prevRemark = '';
@@ -418,23 +460,32 @@
         function syncToCloud() {
             if (!supabaseClient) return;
             clearTimeout(cloudSyncTimer);
-            
-            // 350ms 防抖
+
             cloudSyncTimer = setTimeout(async () => {
-                isSyncingCloud = true; 
+                isSyncingCloud = true;
+                const statusEl = document.getElementById('sync-status');
+
                 try {
-                    await supabaseClient.from('board_state').upsert({
-                        id: 1,
-                        members: members,
-                        dailyRecords: dailyRecords,
-                        actionHistory: actionHistory
-                    });
+                    const { error } = await supabaseClient.from('board_state').upsert({
+                        id: BOARD_ID,
+                        members,
+                        dailyRecords,
+                        actionHistory,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'id' });
+
+                    if (error) throw error;
+
+                    statusEl.innerText = '🟢 已同步到云端';
+                    statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
                 } catch(e) {
-                    console.error("同步到云端出现网络阻塞:", e);
+                    console.error("同步到云端失败:", e);
+                    statusEl.innerText = '⚠️ 保存失败，点我重试';
+                    statusEl.className = "text-xs font-bold px-2 py-1 bg-red-100 text-red-700 rounded-full ml-2";
+                } finally {
+                    setTimeout(() => { isSyncingCloud = false; }, 800);
                 }
-                // 延迟释放自同步锁
-                setTimeout(() => { isSyncingCloud = false; }, 800); 
-            }, 350); 
+            }, 350);
         }
 
         function saveMembers() { saveToLocalOnly(); syncToCloud(); }
@@ -707,6 +758,8 @@
             saveMembers();
             if (syncToToday) {
                 members.forEach(m => {
+                    if (!dailyRecords[TODAY]) dailyRecords[TODAY] = {};
+                    if (!dailyRecords[TODAY][m.id]) dailyRecords[TODAY][m.id] = { tasks: [], remark: '' };
                     dailyRecords[TODAY][m.id].tasks = m.defaultTasks.map(t => ({ text: t, status: 'red' }));
                 });
                 saveRecords();
@@ -733,7 +786,7 @@
 
         function updateClock() {
             const now = new Date();
-            const todayStr = now.toISOString().split('T')[0];
+            const todayStr = getTodayLocal();
             
             if (todayStr !== TODAY) {
                 TODAY = todayStr;
