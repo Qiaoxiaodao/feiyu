@@ -79,7 +79,7 @@
                 加载中...
             </span>
             <span id="sync-status" class="text-xs font-bold px-2 py-1 bg-gray-100 text-gray-500 rounded-full ml-2">
-                ☁️ 本地模式
+                ☁️ 检查连接中...
             </span>
         </div>
         <div class="flex flex-wrap gap-3 justify-center">
@@ -279,47 +279,45 @@
 
         // --- 初始化与本地存储/云端多端同步逻辑 ---
         async function initData() {
-            // 先加载本地缓存
-            const savedMembers = localStorage.getItem('sketchBoard_members_v4');
-            const savedRecords = localStorage.getItem('sketchBoard_records_v4');
-            const savedHistory = localStorage.getItem('sketchBoard_history_v4');
-
-            if (savedMembers) members = JSON.parse(savedMembers);
-            else { members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS)); saveToLocalOnly(); }
-
-            if (savedRecords) dailyRecords = JSON.parse(savedRecords);
-            else dailyRecords = {};
-
-            if (savedHistory) actionHistory = JSON.parse(savedHistory);
-            else actionHistory = [];
-
+            // 默认兜底假数据
+            members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
+            
             const statusEl = document.getElementById('sync-status');
+            
             if (supabaseClient) {
-                statusEl.innerText = '☁️ 正在连接云端...';
+                statusEl.innerText = '☁️ 正在握手云端...';
                 statusEl.className = "text-xs font-bold px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full ml-2";
                 
                 try {
+                    // 🚀 云端绝对优先拉取
                     const { data, error } = await supabaseClient.from('board_state').select('*').eq('id', 1).single();
                     if (error && error.code !== 'PGRST116') throw error;
                     
                     if (data) {
+                        // 强制使用最新的云端数据包覆盖本地
                         if (data.members && data.members.length > 0) members = data.members;
-                        if (data.dailyRecords && Object.keys(data.dailyRecords).length > 0) dailyRecords = data.dailyRecords;
+                        if (data.dailyRecords) dailyRecords = data.dailyRecords;
                         if (data.actionHistory) actionHistory = data.actionHistory;
                         
                         statusEl.innerText = '🟢 云端实时同步中';
                         statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
                     } else {
-                         // 云端尚无记录，推送新节点数据
-                         await supabaseClient.from('board_state').upsert({ id: 1, members: members, dailyRecords: dailyRecords, actionHistory: actionHistory });
+                         // 云端尚无记录，初始化首节点数据并同步
+                         dailyRecords = {};
+                         checkMidnightReset();
+                         await supabaseClient.from('board_state').insert({ id: 1, members: members, dailyRecords: dailyRecords, actionHistory: actionHistory });
                          statusEl.innerText = '🟢 云端实时同步中';
                          statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
                     }
+
+                    // 保存一份备份到本地，以防断网
+                    saveToLocalOnly();
                     
-                    // 🚀 建立实时双向广播，在非本机修改时，自动更新视图而无感刷新 (修正信道注册以防冲突)
+                    // 🚀 建立实时双向实时通道监听
                     supabaseClient.channel('board-sync-channel')
                         .on('postgres_changes', { event: '*', schema: 'public', table: 'board_state' }, (payload) => {
-                            if (isSyncingCloud) return; 
+                            if (isSyncingCloud) return; // 过滤本机刚刚发起的写事件，防自反馈循环
+                            
                             const newData = payload.new;
                             if (newData) {
                                 if (newData.members) members = newData.members;
@@ -332,16 +330,24 @@
                                 renderBottomStats();
                                 renderHistoryLog();
                             }
-                        }).subscribe();
+                        }).subscribe((status) => {
+                            if (status !== 'SUBSCRIBED') {
+                                console.warn("实时广播频道激活失败: ", status);
+                            }
+                        });
                 } catch (e) {
-                    console.error("云端拉取错误:", e);
-                    statusEl.innerText = '⚠️ 云端未响应(离线运行)';
+                    console.error("云端加载失败，降级本地单机存储:", e);
+                    statusEl.innerText = '⚠️ 云端未响应(离线本地模式)';
                     statusEl.className = "text-xs font-bold px-2 py-1 bg-red-100 text-red-700 rounded-full ml-2";
+                    loadLocalBackup();
                 }
+            } else {
+                statusEl.innerText = '☁️ 离线模式(请填写配置Key)';
+                statusEl.className = "text-xs font-bold px-2 py-1 bg-gray-200 text-gray-700 rounded-full ml-2";
+                loadLocalBackup();
             }
 
             checkMidnightReset();
-            saveToLocalOnly();
             
             setQuickDate('week'); 
             setBottomQuickDate('week');
@@ -349,7 +355,18 @@
             renderBoard();
         }
 
-        // 跨天检测：自动初始化新一天的成员任务，同时保留昨天的备注
+        // 离线备用加载
+        function loadLocalBackup() {
+            const savedMembers = localStorage.getItem('sketchBoard_members_v4');
+            const savedRecords = localStorage.getItem('sketchBoard_records_v4');
+            const savedHistory = localStorage.getItem('sketchBoard_history_v4');
+
+            if (savedMembers) members = JSON.parse(savedMembers);
+            if (savedRecords) dailyRecords = JSON.parse(savedRecords);
+            if (savedHistory) actionHistory = JSON.parse(savedHistory);
+        }
+
+        // 跨天自动重置，保留前一天的备注
         function checkMidnightReset() {
             if (!dailyRecords[TODAY]) {
                 dailyRecords[TODAY] = {};
@@ -375,11 +392,12 @@
             localStorage.setItem('sketchBoard_history_v4', JSON.stringify(actionHistory));
         }
 
-        // 云端同步主调引擎（防抖处理防过密读写）
+        // 核心同步广播引擎 (优化强广播机制)
         function syncToCloud() {
             if (!supabaseClient) return;
             clearTimeout(cloudSyncTimer);
             
+            // 200ms 高灵敏度防抖触发广播
             cloudSyncTimer = setTimeout(async () => {
                 isSyncingCloud = true; 
                 try {
@@ -390,10 +408,11 @@
                         actionHistory: actionHistory
                     });
                 } catch(e) {
-                    console.error("上传云端报错", e);
+                    console.error("同步到云端出现网络阻塞:", e);
                 }
-                setTimeout(() => { isSyncingCloud = false; }, 500); 
-            }, 800); 
+                // 延迟释放自同步锁，防止多设备同时更新时数据产生竞态覆盖
+                setTimeout(() => { isSyncingCloud = false; }, 800); 
+            }, 200); 
         }
 
         function saveMembers() { saveToLocalOnly(); syncToCloud(); }
@@ -434,7 +453,7 @@
             const todayData = dailyRecords[TODAY];
 
             const currentHour = new Date().getHours();
-            const isLate = currentHour >= 18; // 18点后启动催办
+            const isLate = currentHour >= 18; // 18点后自动开始催办闪动
 
             members.forEach(member => {
                 const data = todayData[member.id] || { tasks: [], remark: '' };
@@ -497,7 +516,6 @@
             });
         }
 
-        // 名字双击可编辑
         function editMemberName(memberId, element) {
             const member = members.find(m => m.id === memberId);
             if (!member) return;
@@ -583,7 +601,6 @@
             }
         }
 
-        // --- 头像管理与上传 ---
         function openAvatarModal(memberId) {
             currentEditingMemberId = memberId;
             const grid = document.getElementById('avatar-grid');
@@ -638,7 +655,6 @@
             }
         }
 
-        // --- 任务库管理 ---
         function openTaskModal() {
             const list = document.getElementById('task-list');
             list.innerHTML = '';
@@ -693,7 +709,6 @@
             });
         }
 
-        // --- 实时时间与跨天 ---
         function updateClock() {
             const now = new Date();
             const todayStr = now.toISOString().split('T')[0];
@@ -712,7 +727,6 @@
             renderBoard(); 
         }
 
-        // --- 历史记录渲染 ---
         function renderHistoryLog() {
             const container = document.getElementById('action-history');
             container.innerHTML = '';
@@ -739,7 +753,6 @@
             });
         }
 
-        // --- 数据统计与完成率百分比积分计算 ---
         function openStatsModal() {
             document.getElementById('stats-modal').classList.remove('hidden');
             renderStats();
@@ -786,7 +799,6 @@
             return dates;
         }
 
-        // 渲染弹窗版的高级数据统计 (精细化积分法：🟢=100分，🟠=50分，🔴=0分)
         function renderStats() {
             const modalChartContainer = document.getElementById('modal-chart-container');
             const historyContainer = document.getElementById('modal-history-container');
@@ -854,7 +866,6 @@
             }
         }
 
-        // 渲染底部常驻的数据统计 (使用精细化均分计算法)
         function renderBottomStats() {
             const bottomChartContainer = document.getElementById('bottom-chart-container');
             bottomChartContainer.innerHTML = '';
