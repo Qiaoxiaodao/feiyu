@@ -1,13 +1,25 @@
 <!-- 
 =========================================================================
-📌 【Supabase 粘贴配置指引】
-   如果您需要配置 Supabase 联机功能，请直接用记事本打开此文件，
-   按键盘 Ctrl + F 键，搜索 "SUPABASE_URL" 就能瞬间定位到配置行！
-   
-   具体配置在下方代码的第 185 行左右（就在 <script> 标签刚开始的地方）：
-   
-   const SUPABASE_URL = "您的 Supabase 项目 URL 地址";
-   const SUPABASE_KEY = "您的 Supabase Anon API Key";
+📌 【Supabase 联机配置与建表指引】(必看！)
+
+1. 填入密钥：
+   请在下方代码的第 190 行左右，填入您的 Supabase URL 和 API Key。
+
+2. 建立云端数据库 (如果您朋友还没建的话)：
+   想要跨设备同步，云端需要有一个表格来存数据。
+   请登录 Supabase 后台 -> 点击左侧的 "SQL Editor" -> 点击 "New Query"
+   将下面这 7 行 SQL 代码复制进去并点击 "Run" (运行)：
+
+   create table if not exists board_state (
+     id integer primary key,
+     members jsonb,
+     dailyRecords jsonb,
+     actionHistory jsonb
+   );
+   insert into board_state (id) values (1) on conflict do nothing;
+   alter table board_state disable row level security;
+
+   (运行成功后，您的系统就彻底打通全网实时同步了！)
 =========================================================================
 -->
 <!DOCTYPE html>
@@ -17,18 +29,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FEIYU天天向上</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 🚀 新增：引入 Supabase 云端同步的核心支持库 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* 引入圆润清晰的英文字体 Nunito，中文字体优先使用系统楷体 */
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap');
         
         body {
             font-family: 'Nunito', 'Kaiti', 'STKaiti', 'KaiTi_GB2312', sans-serif;
-            /* 需求：大背景改成浅黄色 */
             background-color: #fef9ec;
             color: #333;
         }
 
-        /* 直线极简边框 */
         .sketch-border {
             border: 2px solid #2d3748;
             border-radius: 8px;
@@ -40,7 +51,6 @@
             border-radius: 6px;
         }
 
-        /* 按钮交互 */
         .sketch-btn {
             transition: all 0.2s ease;
             cursor: pointer;
@@ -54,7 +64,6 @@
             box-shadow: 2px 2px 0 rgba(0,0,0,0.1);
         }
 
-        /* 催办动画：仅头像和名字微微呼吸放大 */
         @keyframes pulsing-alert {
             0%, 100% { transform: scale(1); color: inherit; }
             50% { transform: scale(1.08); color: #ef4444; }
@@ -64,7 +73,6 @@
             transform-origin: left center;
         }
 
-        /* 任务颜色类 */
         .task-bg-red { background-color: #FEE2E2; }
         .task-bg-orange { background-color: #FEF3C7; }
         .task-bg-green { background-color: #D1FAE5; }
@@ -83,16 +91,18 @@
 </head>
 <body class="min-h-screen p-4 md:p-8 flex flex-col">
 
-    <!-- 顶部导航条 - 需求：大底色不那么白，标题背景加个活泼颜色 -->
+    <!-- 顶部导航条 -->
     <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-amber-100 p-4 sketch-border">
         <div class="flex items-center gap-4 flex-wrap justify-center">
             <h1 class="text-3xl md:text-4xl font-bold tracking-wider text-gray-800">💪 FEIYU天天向上</h1>
             <span id="current-time" class="text-base md:text-lg font-bold sketch-border-sm px-3 py-1 bg-yellow-50 text-amber-900">
                 加载时间...
             </span>
+            <span id="sync-status" class="text-xs font-bold px-2 py-1 bg-gray-100 text-gray-500 rounded-full ml-2 hidden">
+                ☁️ 离线模式
+            </span>
         </div>
         <div class="flex flex-wrap gap-3 justify-center">
-            <!-- 修改点：标题更名为“📊 数据分析” -->
             <button onclick="openStatsModal()" class="sketch-border sketch-btn bg-white px-4 py-2 font-bold hover:bg-yellow-50">📊 数据分析</button>
             <button onclick="openTaskModal()" class="sketch-border sketch-btn bg-indigo-100 px-4 py-2 font-bold hover:bg-indigo-200">📝 管理任务库</button>
         </div>
@@ -107,11 +117,9 @@
 
     <!-- 底部常驻数据统计与历史动态 -->
     <footer class="mt-8 pt-8 border-t-2 border-gray-300 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <!-- 底部数据统计表 - 需求：可以自主选择筛选日期，不单单展示7天 -->
         <div class="sketch-border bg-[#fffdf5] p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
                 <h2 class="text-2xl font-bold">📊 数据统计与完成率概览</h2>
-                <!-- 底部直接显示筛选输入 -->
                 <div class="flex flex-wrap items-center gap-1.5 bg-yellow-50/60 p-1.5 sketch-border-sm text-xs">
                     <input type="date" id="bottom-stat-start" class="sketch-border-sm px-1.5 py-0.5 bg-white scale-90 md:scale-100">
                     <span>至</span>
@@ -126,7 +134,6 @@
             </div>
         </div>
 
-        <!-- 历史打卡日志 -->
         <div class="sketch-border bg-[#fffdf5] p-6">
             <h2 class="text-2xl font-bold mb-6">📜 团队实时动态 (历史打卡与备注)</h2>
             <div id="action-history" class="h-48 overflow-y-auto flex flex-col gap-3 pr-2">
@@ -139,7 +146,6 @@
     <div id="stats-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center z-50">
         <div class="sketch-border bg-[#fffdf5] p-6 max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto relative">
             <button onclick="closeStatsModal()" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 font-bold text-2xl">✖</button>
-            
             <h2 class="text-2xl font-bold mb-6">数据统计报表 (按日全清算完成率)</h2>
             
             <div class="flex flex-wrap items-center gap-2 bg-yellow-50 p-2 sketch-border-sm mb-6 w-max">
@@ -152,15 +158,11 @@
                 <button onclick="setQuickDate('month')" class="sketch-border-sm px-3 py-1 bg-white hover:bg-gray-100">近30天</button>
             </div>
             
-            <div id="modal-chart-container" class="flex items-end justify-around h-64 border-b-2 border-l-2 border-gray-800 pb-2 pl-2 mb-8 relative bg-white/50 rounded p-2">
-                <!-- 柱状图 -->
-            </div>
+            <div id="modal-chart-container" class="flex items-end justify-around h-64 border-b-2 border-l-2 border-gray-800 pb-2 pl-2 mb-8 relative bg-white/50 rounded p-2"></div>
             
             <div>
                 <h3 class="text-xl font-bold mb-4">该时段内的详细备注</h3>
-                <div id="modal-history-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto p-2 sketch-border bg-gray-50">
-                    <!-- 备注记录 -->
-                </div>
+                <div id="modal-history-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto p-2 sketch-border bg-gray-50"></div>
             </div>
         </div>
     </div>
@@ -169,9 +171,7 @@
     <div id="avatar-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center z-50">
         <div class="sketch-border bg-[#fffdf5] p-6 max-w-lg w-full mx-4">
             <h2 class="text-xl font-bold mb-4">选择手绘头像</h2>
-            <div id="avatar-grid" class="grid grid-cols-4 sm:grid-cols-5 gap-3 mb-6">
-                <!-- 头像由JS渲染 -->
-            </div>
+            <div id="avatar-grid" class="grid grid-cols-4 sm:grid-cols-5 gap-3 mb-6"></div>
             <div class="flex justify-between items-center pt-4 border-t-2 border-gray-200">
                 <div>
                     <input type="file" id="avatar-upload" class="hidden" accept="image/*" onchange="handleAvatarUpload(event)">
@@ -189,9 +189,7 @@
                 <h2 class="text-xl font-bold">默认任务库管理 (每行一个任务)</h2>
                 <button onclick="closeTaskModal()" class="text-gray-500 hover:text-black font-bold text-xl">✖</button>
             </div>
-            <div id="task-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <!-- 任务列表由JS渲染 -->
-            </div>
+            <div id="task-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></div>
             <div class="flex gap-4 mt-6">
                 <button onclick="saveTaskModal(false)" class="sketch-border sketch-btn px-4 py-3 bg-gray-100 flex-1 font-bold text-gray-700">仅保存默认任务库</button>
                 <button onclick="saveTaskModal(true)" class="sketch-border sketch-btn px-4 py-3 bg-green-200 flex-1 font-bold text-green-800">保存！并立即同步到今天看板</button>
@@ -201,37 +199,34 @@
 
     <script>
         // =========================================================================
-        // 💻 SUPABASE 云端同步配置区域 (第二阶段联机使用，若不使用请保持留空)
+        // 💻 SUPABASE 云端同步配置区域 (请填写下面两行内容)
         // =========================================================================
-        const SUPABASE_URL = "https://wyicdosflniljzsaduaz.supabase.co/rest/v1/"; // 请在此处双引号内填入您的 Supabase URL
-        const SUPABASE_KEY = "sb_publishable_YRM7T9eLC2Qqf7kAO265mQ_IQ-YC-j4"; // 请在此处双引号内填入您的 Supabase API Key (Anon Key)
+        const SUPABASE_URL = "https://wyicdosflniljzsaduaz.supabase.co/rest/v1/"; 
+        const SUPABASE_KEY = "sb_publishable_YRM7T9eLC2Qqf7kAO265mQ_IQ-YC-j4"; 
         // =========================================================================
+
+        // 初始化 Supabase 客户端
+        const supabaseClient = (SUPABASE_URL && SUPABASE_KEY) 
+            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
+            : null;
 
         // --- 核心数据结构 ---
         let TODAY = new Date().toISOString().split('T')[0]; 
         let currentEditingMemberId = null;
+        let isSyncingCloud = false;
+        let cloudSyncTimer = null;
 
         // 彩色手绘风小动物 SVG
         const AVATARS = [
-            // 1. 橘猫
             `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="40" fill="#fbd38d" stroke="#2d3748" stroke-width="3"/><path d="M15 50 L10 15 L45 35 Z" fill="#fbd38d" stroke="#2d3748" stroke-width="3"/><path d="M85 50 L90 15 L55 35 Z" fill="#fbd38d" stroke="#2d3748" stroke-width="3"/><circle cx="35" cy="50" r="5" fill="#2d3748"/><circle cx="65" cy="50" r="5" fill="#2d3748"/><path d="M45 60 Q50 68 55 60" fill="none" stroke="#2d3748" stroke-width="3" stroke-linecap="round"/></svg>`,
-            // 2. 棕狗
             `<svg viewBox="0 0 100 100"><rect x="20" y="30" width="60" height="55" rx="20" fill="#d69e2e" stroke="#2d3748" stroke-width="3"/><path d="M20 45 Q5 35 10 65 Q25 65 20 50" fill="#744210" stroke="#2d3748" stroke-width="3"/><path d="M80 45 Q95 35 90 65 Q75 65 80 50" fill="#744210" stroke="#2d3748" stroke-width="3"/><circle cx="40" cy="55" r="4" fill="#2d3748"/><circle cx="60" cy="55" r="4" fill="#2d3748"/><circle cx="50" cy="68" r="6" fill="#2d3748"/></svg>`,
-            // 3. 棕熊
             `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="40" fill="#975a16" stroke="#2d3748" stroke-width="3"/><circle cx="25" cy="25" r="15" fill="#744210" stroke="#2d3748" stroke-width="3"/><circle cx="75" cy="25" r="15" fill="#744210" stroke="#2d3748" stroke-width="3"/><circle cx="40" cy="50" r="4" fill="#fff"/><circle cx="60" cy="50" r="4" fill="#fff"/><circle cx="50" cy="65" r="12" fill="#d69e2e" stroke="#2d3748" stroke-width="3"/><circle cx="50" cy="62" r="4" fill="#2d3748"/></svg>`,
-            // 4. 粉兔
             `<svg viewBox="0 0 100 100"><ellipse cx="50" cy="65" rx="35" ry="30" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><ellipse cx="35" cy="25" rx="10" ry="30" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><ellipse cx="65" cy="25" rx="10" ry="30" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><circle cx="40" cy="60" r="4" fill="#2d3748"/><circle cx="60" cy="60" r="4" fill="#2d3748"/><path d="M50 70 L47 75 L53 75 Z" fill="#2d3748"/></svg>`,
-            // 5. 熊猫
             `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="40" fill="#fff" stroke="#2d3748" stroke-width="3"/><circle cx="20" cy="25" r="15" fill="#2d3748"/><circle cx="80" cy="25" r="15" fill="#2d3748"/><ellipse cx="35" cy="50" rx="10" ry="14" fill="#2d3748"/><ellipse cx="65" cy="50" rx="10" ry="14" fill="#2d3748"/><circle cx="35" cy="48" r="3" fill="#fff"/><circle cx="65" cy="48" r="3" fill="#fff"/><circle cx="50" cy="65" r="4" fill="#2d3748"/></svg>`,
-            // 6. 狐狸
             `<svg viewBox="0 0 100 100"><polygon points="50,90 10,40 30,20 50,45 70,20 90,40" fill="#ed8936" stroke="#2d3748" stroke-width="3"/><polygon points="50,90 30,55 50,45 70,55" fill="#fff"/><circle cx="40" cy="55" r="4" fill="#2d3748"/><circle cx="60" cy="55" r="4" fill="#2d3748"/><circle cx="50" cy="80" r="5" fill="#2d3748"/></svg>`,
-            // 7. 粉猪
             `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="40" fill="#fed7e2" stroke="#2d3748" stroke-width="3"/><polygon points="20,40 10,15 40,25" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><polygon points="80,40 90,15 60,25" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><ellipse cx="50" cy="60" rx="15" ry="10" fill="#fbb6ce" stroke="#2d3748" stroke-width="3"/><circle cx="45" cy="60" r="3" fill="#2d3748"/><circle cx="55" cy="60" r="3" fill="#2d3748"/><circle cx="35" cy="45" r="4" fill="#2d3748"/><circle cx="65" cy="45" r="4" fill="#2d3748"/></svg>`,
-            // 8. 青蛙
             `<svg viewBox="0 0 100 100"><ellipse cx="50" cy="65" rx="45" ry="30" fill="#68d391" stroke="#2d3748" stroke-width="3"/><circle cx="30" cy="35" r="18" fill="#68d391" stroke="#2d3748" stroke-width="3"/><circle cx="70" cy="35" r="18" fill="#68d391" stroke="#2d3748" stroke-width="3"/><circle cx="30" cy="35" r="6" fill="#2d3748"/><circle cx="70" cy="35" r="6" fill="#2d3748"/><path d="M35 75 Q50 85 65 75" fill="none" stroke="#2d3748" stroke-width="4" stroke-linecap="round"/></svg>`,
-            // 9. 企鹅
             `<svg viewBox="0 0 100 100"><ellipse cx="50" cy="55" rx="35" ry="40" fill="#2a4365" stroke="#2d3748" stroke-width="3"/><path d="M30 45 Q50 20 70 45 Q50 65 30 45" fill="#fff"/><circle cx="40" cy="45" r="4" fill="#2d3748"/><circle cx="60" cy="45" r="4" fill="#2d3748"/><path d="M45 55 L55 55 L50 65 Z" fill="#ecc94b" stroke="#2d3748" stroke-width="2"/></svg>`,
-            // 10. 小黄鸡
             `<svg viewBox="0 0 100 100"><circle cx="50" cy="55" r="35" fill="#faf089" stroke="#2d3748" stroke-width="3"/><path d="M45 20 L50 10 L55 20 Z" fill="#f6ad55" stroke="#2d3748" stroke-width="2"/><circle cx="40" cy="50" r="4" fill="#2d3748"/><circle cx="60" cy="50" r="4" fill="#2d3748"/><path d="M45 60 L55 60 L50 70 Z" fill="#f6ad55" stroke="#2d3748" stroke-width="2"/></svg>`
         ];
 
@@ -246,14 +241,15 @@
         let dailyRecords = {};
         let actionHistory = [];
 
-        // --- 初始化与本地存储逻辑 ---
-        function initData() {
+        // --- 初始化数据拉取逻辑 ---
+        async function initData() {
+            // 1. 先用本地缓存铺设页面（保证访问秒开）
             const savedMembers = localStorage.getItem('sketchBoard_members_v4');
             const savedRecords = localStorage.getItem('sketchBoard_records_v4');
             const savedHistory = localStorage.getItem('sketchBoard_history_v4');
 
             if (savedMembers) members = JSON.parse(savedMembers);
-            else { members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS)); saveMembers(); }
+            else members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
 
             if (savedRecords) dailyRecords = JSON.parse(savedRecords);
             else dailyRecords = {};
@@ -261,11 +257,68 @@
             if (savedHistory) actionHistory = JSON.parse(savedHistory);
             else actionHistory = [];
 
-            // 每天零点自动重置，保留前一天的备注
+            // 2. 如果开启了云端同步，静默拉取并覆盖
+            const statusEl = document.getElementById('sync-status');
+            if (supabaseClient) {
+                statusEl.classList.remove('hidden');
+                statusEl.innerText = '☁️ 正在连接云端...';
+                
+                try {
+                    const { data, error } = await supabaseClient.from('board_state').select('*').eq('id', 1).single();
+                    if (data) {
+                        if (data.members && data.members.length > 0) members = data.members;
+                        if (data.dailyRecords && Object.keys(data.dailyRecords).length > 0) dailyRecords = data.dailyRecords;
+                        if (data.actionHistory) actionHistory = data.actionHistory;
+                        
+                        statusEl.innerText = '🟢 云端实时同步中';
+                        statusEl.classList.replace('bg-gray-100', 'bg-green-100');
+                        statusEl.classList.replace('text-gray-500', 'text-green-700');
+                    } else {
+                         // 没有数据证明没执行SQL初始化，直接帮他们推一个空壳上去
+                         await supabaseClient.from('board_state').upsert({ id: 1, members: members, dailyRecords: dailyRecords, actionHistory: actionHistory });
+                         statusEl.innerText = '🟢 云端实时同步中';
+                    }
+                    
+                    // 开启实时监听频道：其他设备修改时，当前设备自动刷新
+                    supabaseClient.channel('board-sync-channel')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'board_state' }, (payload) => {
+                            if (isSyncingCloud) return; // 不要被自己刚推上去的数据触发更新，避免死循环
+                            const newData = payload.new;
+                            if (newData) {
+                                if (newData.members) members = newData.members;
+                                if (newData.dailyRecords) dailyRecords = newData.dailyRecords;
+                                if (newData.actionHistory) actionHistory = newData.actionHistory;
+                                
+                                checkMidnightReset(); // 更新后再做一次午夜检查
+                                saveToLocalOnly();    // 备份到本地
+                                renderBoard();
+                                renderBottomStats();
+                                renderHistoryLog();
+                            }
+                        }).subscribe();
+                } catch (e) {
+                    console.error("云端拉取失败，请检查建表 SQL 是否已运行", e);
+                    statusEl.innerText = '⚠️ 云端未响应 (离线使用)';
+                    statusEl.classList.replace('bg-gray-100', 'bg-red-100');
+                    statusEl.classList.replace('text-gray-500', 'text-red-700');
+                }
+            } else {
+                statusEl.classList.remove('hidden');
+            }
+
+            checkMidnightReset();
+            saveToLocalOnly();
+            
+            setQuickDate('week'); 
+            setBottomQuickDate('week');
+            renderHistoryLog();
+            renderBoard();
+        }
+
+        // --- 午夜跨天逻辑抽取 ---
+        function checkMidnightReset() {
             if (!dailyRecords[TODAY]) {
                 dailyRecords[TODAY] = {};
-                
-                // 找到最近的有记录的一天，继承备注
                 const pastDates = Object.keys(dailyRecords).sort().reverse();
                 let lastDate = pastDates.length > 0 ? pastDates[0] : null;
 
@@ -279,18 +332,40 @@
                         remark: prevRemark 
                     };
                 });
-                saveRecords();
             }
-            
-            // 初始化两个区域的时间筛选值
-            setQuickDate('week'); 
-            setBottomQuickDate('week');
-            renderHistoryLog();
         }
 
-        function saveMembers() { localStorage.setItem('sketchBoard_members_v4', JSON.stringify(members)); }
-        function saveRecords() { localStorage.setItem('sketchBoard_records_v4', JSON.stringify(dailyRecords)); }
-        function saveHistory() { localStorage.setItem('sketchBoard_history_v4', JSON.stringify(actionHistory)); }
+        // --- 全新改版的双路存储引擎 (本地保存 + 云端防抖上传) ---
+        function saveToLocalOnly() {
+            localStorage.setItem('sketchBoard_members_v4', JSON.stringify(members));
+            localStorage.setItem('sketchBoard_records_v4', JSON.stringify(dailyRecords));
+            localStorage.setItem('sketchBoard_history_v4', JSON.stringify(actionHistory));
+        }
+
+        function syncToCloud() {
+            if (!supabaseClient) return;
+            clearTimeout(cloudSyncTimer);
+            
+            // 800毫秒防抖：打字太快时不会疯狂发请求，停顿 0.8 秒后统一上传
+            cloudSyncTimer = setTimeout(async () => {
+                isSyncingCloud = true; 
+                try {
+                    await supabaseClient.from('board_state').upsert({
+                        id: 1,
+                        members: members,
+                        dailyRecords: dailyRecords,
+                        actionHistory: actionHistory
+                    });
+                } catch(e) {
+                    console.error("上传云端失败", e);
+                }
+                setTimeout(() => { isSyncingCloud = false; }, 500); 
+            }, 800); 
+        }
+
+        function saveMembers() { saveToLocalOnly(); syncToCloud(); }
+        function saveRecords() { saveToLocalOnly(); syncToCloud(); }
+        function saveHistory() { saveToLocalOnly(); syncToCloud(); }
 
         // 获取头像 HTML (处理内置 SVG 和 自定义上传图片)
         function getAvatarHTML(member) {
@@ -317,9 +392,7 @@
                 text: actionText
             });
 
-            // 保留最近 50 条
             if(actionHistory.length > 50) actionHistory.pop();
-            
             saveHistory();
             renderHistoryLog();
         }
@@ -331,7 +404,7 @@
             const todayData = dailyRecords[TODAY];
 
             const currentHour = new Date().getHours();
-            const isLate = currentHour >= 18; // 晚上6点后未完成开始呼吸提醒
+            const isLate = currentHour >= 18; 
 
             members.forEach(member => {
                 const data = todayData[member.id] || { tasks: [], remark: '' };
@@ -358,7 +431,6 @@
                     `;
                 }).join('');
 
-                // 修改点：为名字添加双击编辑功能 (ondblclick)
                 const cardHTML = `
                     <div class="sketch-border bg-white p-6 flex flex-col gap-4 relative transition-colors duration-300 min-h-[350px]">
                         <div class="flex items-center gap-4">
@@ -412,7 +484,7 @@
                     member.name = newName;
                     saveMembers();
                     logAction(memberId, `将名字从 [${oldName}] 修改为 [${newName}] ✏️`);
-                    renderBottomStats(); // 同步刷新底部图标名字
+                    renderBottomStats(); 
                 }
             }
             renderBoard();
@@ -426,16 +498,12 @@
             saveRecords();
             renderBoard();
 
-            // 如果刚标记为已完成，记录动态
             if (newStatus === 'green' && oldStatus !== 'green') {
                 logAction(memberId, `打卡完成: [${task.text}] ✅`);
             }
             
-            // 打卡状态更新时同时刷新底部和弹窗统计图表
             renderBottomStats();
-            if(!document.getElementById('stats-modal').classList.contains('hidden')) {
-                renderStats();
-            }
+            if(!document.getElementById('stats-modal').classList.contains('hidden')) renderStats();
         }
 
         function addTodayTaskInline(memberId) {
@@ -507,7 +575,6 @@
             currentEditingMemberId = null;
         }
 
-        // 统一选择头像
         function selectAvatar(avatarId) {
             if (currentEditingMemberId) {
                 const member = members.find(m => m.id === currentEditingMemberId);
@@ -522,10 +589,11 @@
             closeAvatarModal();
         }
 
-        // 上传自定义头像
         function handleAvatarUpload(event) {
             const file = event.target.files[0];
             if (file) {
+                // 为了能通过 Supabase 云端同步图片，必须压缩大图片。这里利用 FileReader 转 Base64
+                // 注：原生 JSON 存储大图片 base64 会很慢，建议成员头像上传尽量控制在 500kb 以下的小图
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const base64Str = e.target.result;
@@ -585,7 +653,8 @@
         }
 
         function closeTaskModal() {
-            initData(); // 取消则还原
+            // 不点保存直接关闭，则用云端/本地最新的还原界面即可
+            renderBoard(); 
             document.getElementById('task-modal').classList.add('hidden');
         }
 
@@ -604,10 +673,10 @@
             const now = new Date();
             const todayStr = now.toISOString().split('T')[0];
             
-            // 跨天自动重置检测
             if (todayStr !== TODAY) {
                 TODAY = todayStr;
-                initData(); 
+                checkMidnightReset();
+                saveRecords(); 
                 renderBoard();
             }
 
@@ -658,32 +727,26 @@
         function setQuickDate(period) {
             const endInput = document.getElementById('stat-end');
             const startInput = document.getElementById('stat-start');
-            
             const endDate = new Date();
             const startDate = new Date();
-            
             if (period === 'week') startDate.setDate(endDate.getDate() - 6);
             else if (period === 'month') startDate.setDate(endDate.getDate() - 29);
 
             endInput.value = endDate.toISOString().split('T')[0];
             startInput.value = startDate.toISOString().split('T')[0];
-            
             renderStats();
         }
 
         function setBottomQuickDate(period) {
             const endInput = document.getElementById('bottom-stat-end');
             const startInput = document.getElementById('bottom-stat-start');
-            
             const endDate = new Date();
             const startDate = new Date();
-            
             if (period === 'week') startDate.setDate(endDate.getDate() - 6);
             else if (period === 'month') startDate.setDate(endDate.getDate() - 29);
 
             endInput.value = endDate.toISOString().split('T')[0];
             startInput.value = startDate.toISOString().split('T')[0];
-            
             renderBottomStats();
         }
 
@@ -763,7 +826,7 @@
             }
         }
 
-        // 渲染底部常驻的数据统计，同样支持完整的日期范围筛选
+        // 渲染底部常驻的数据统计
         function renderBottomStats() {
             const bottomChartContainer = document.getElementById('bottom-chart-container');
             bottomChartContainer.innerHTML = '';
@@ -793,7 +856,7 @@
                 });
 
                 const rate = validDays === 0 ? 0 : Math.round((greenDays / validDays) * 100);
-                const barHeight = rate === 0 ? 5 : (rate / 100) * 140; // 底部柱状图最高140px
+                const barHeight = rate === 0 ? 5 : (rate / 100) * 140; 
 
                 bottomChartContainer.innerHTML += `
                     <div class="flex flex-col items-center group relative w-12 md:w-16">
@@ -813,8 +876,8 @@
         }
 
         // --- 启动执行 ---
-        window.onload = () => {
-            initData();
+        window.onload = async () => {
+            await initData();
             updateClock(); 
             setInterval(updateClock, 60000); 
         };
