@@ -78,7 +78,7 @@
             <span id="current-time" class="text-base md:text-lg font-bold sketch-border-sm px-3 py-1 bg-yellow-50 text-amber-900">
                 加载中...
             </span>
-            <span id="sync-status" class="text-xs font-bold px-2 py-1 bg-gray-100 text-gray-500 rounded-full ml-2">
+            <span id="sync-status" class="text-xs font-bold px-2 py-1 bg-gray-100 text-gray-500 rounded-full ml-2 cursor-pointer" onclick="initData()" title="点击尝试重新连接">
                 ☁️ 检查连接中...
             </span>
         </div>
@@ -208,11 +208,7 @@
         const SUPABASE_KEY = "sb_publishable_YRM7T9eLC2Qqf7kAO265mQ_IQ-YC-j4"; 
         // =========================================================================
 
-        // 初始化客户端驱动
-        const supabaseClient = (SUPABASE_URL && SUPABASE_KEY) 
-            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
-            : null;
-
+        let supabaseClient = null;
         let TODAY = new Date().toISOString().split('T')[0]; 
         let currentEditingMemberId = null;
         let isSyncingCloud = false;
@@ -279,48 +275,68 @@
 
         // --- 初始化与本地存储/云端多端同步逻辑 ---
         async function initData() {
-            // 默认兜底假数据
-            members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
-            
             const statusEl = document.getElementById('sync-status');
             
+            // 1. 安全初始化客户端，彻底隔离加载顺序报错问题
+            try {
+                if (SUPABASE_URL && SUPABASE_KEY && window.supabase) {
+                    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                }
+            } catch(err) {
+                console.error("Supabase 客户端初始化异常:", err);
+            }
+
+            // 2. 默认加载本地缓存作为冷启动首屏数据
+            loadLocalBackup();
+            if (members.length === 0) {
+                members = JSON.parse(JSON.stringify(DEFAULT_MEMBERS));
+                saveToLocalOnly();
+            }
+
             if (supabaseClient) {
-                statusEl.innerText = '☁️ 正在握手云端...';
+                statusEl.innerText = '☁️ 正在建立安全握手...';
                 statusEl.className = "text-xs font-bold px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full ml-2";
                 
                 try {
-                    // 🚀 云端绝对优先拉取
+                    // 🚀 云端主存数据加载，并对云端有无有效表数据做原子判定
                     const { data, error } = await supabaseClient.from('board_state').select('*').eq('id', 1).single();
-                    if (error && error.code !== 'PGRST116') throw error;
                     
-                    if (data) {
-                        // 强制使用最新的云端数据包覆盖本地
-                        if (data.members && data.members.length > 0) members = data.members;
-                        if (data.dailyRecords) dailyRecords = data.dailyRecords;
-                        if (data.actionHistory) actionHistory = data.actionHistory;
+                    if (error && error.code !== 'PGRST116') {
+                        throw error;
+                    }
+                    
+                    if (data && data.members && data.members.length > 0) {
+                        // 🌈 云端握手并校验通过：强制使用最新的云端数据包覆盖本地
+                        members = data.members;
+                        dailyRecords = data.dailyRecords || {};
+                        actionHistory = data.actionHistory || [];
                         
                         statusEl.innerText = '🟢 云端实时同步中';
                         statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
+                        
+                        saveToLocalOnly(); // 本地进行镜像备份
                     } else {
-                         // 云端尚无记录，初始化首节点数据并同步
-                         dailyRecords = {};
-                         checkMidnightReset();
-                         await supabaseClient.from('board_state').insert({ id: 1, members: members, dailyRecords: dailyRecords, actionHistory: actionHistory });
-                         statusEl.innerText = '🟢 云端实时同步中';
-                         statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
+                        // 云端完全无有效快照：本机推送初始化主包至云端，激活共享通道
+                        dailyRecords = {};
+                        checkMidnightReset();
+                        await supabaseClient.from('board_state').upsert({ 
+                            id: 1, 
+                            members: members, 
+                            dailyRecords: dailyRecords, 
+                            actionHistory: actionHistory 
+                        });
+                        statusEl.innerText = '🟢 云端实时同步中';
+                        statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
                     }
-
-                    // 保存一份备份到本地，以防断网
-                    saveToLocalOnly();
                     
-                    // 🚀 建立实时双向实时通道监听
+                    // 🚀 核心修复：建立高可靠性的全局数据接收广播监听器
                     supabaseClient.channel('board-sync-channel')
-                        .on('postgres_changes', { event: '*', schema: 'public', table: 'board_state' }, (payload) => {
-                            if (isSyncingCloud) return; // 过滤本机刚刚发起的写事件，防自反馈循环
+                        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'board_state', filter: 'id=eq.1' }, (payload) => {
+                            if (isSyncingCloud) return; // 本机刚刚推上去的写通知，不做二次重绘处理，杜绝自发循环死锁
                             
                             const newData = payload.new;
                             if (newData) {
-                                if (newData.members) members = newData.members;
+                                if (newData.members && newData.members.length > 0) members = newData.members;
                                 if (newData.dailyRecords) dailyRecords = newData.dailyRecords;
                                 if (newData.actionHistory) actionHistory = newData.actionHistory;
                                 
@@ -336,15 +352,13 @@
                             }
                         });
                 } catch (e) {
-                    console.error("云端加载失败，降级本地单机存储:", e);
-                    statusEl.innerText = '⚠️ 云端未响应(离线本地模式)';
+                    console.error("云端加载失败:", e);
+                    statusEl.innerText = '⚠️ 云端未响应(离线运行)';
                     statusEl.className = "text-xs font-bold px-2 py-1 bg-red-100 text-red-700 rounded-full ml-2";
-                    loadLocalBackup();
                 }
             } else {
                 statusEl.innerText = '☁️ 离线模式(请填写配置Key)';
                 statusEl.className = "text-xs font-bold px-2 py-1 bg-gray-200 text-gray-700 rounded-full ml-2";
-                loadLocalBackup();
             }
 
             checkMidnightReset();
@@ -357,13 +371,17 @@
 
         // 离线备用加载
         function loadLocalBackup() {
-            const savedMembers = localStorage.getItem('sketchBoard_members_v4');
-            const savedRecords = localStorage.getItem('sketchBoard_records_v4');
-            const savedHistory = localStorage.getItem('sketchBoard_history_v4');
+            try {
+                const savedMembers = localStorage.getItem('sketchBoard_members_v4');
+                const savedRecords = localStorage.getItem('sketchBoard_records_v4');
+                const savedHistory = localStorage.getItem('sketchBoard_history_v4');
 
-            if (savedMembers) members = JSON.parse(savedMembers);
-            if (savedRecords) dailyRecords = JSON.parse(savedRecords);
-            if (savedHistory) actionHistory = JSON.parse(savedHistory);
+                if (savedMembers) members = JSON.parse(savedMembers);
+                if (savedRecords) dailyRecords = JSON.parse(savedRecords);
+                if (savedHistory) actionHistory = JSON.parse(savedHistory);
+            } catch(e) {
+                console.error("读取本地缓存失败", e);
+            }
         }
 
         // 跨天自动重置，保留前一天的备注
@@ -387,17 +405,21 @@
         }
 
         function saveToLocalOnly() {
-            localStorage.setItem('sketchBoard_members_v4', JSON.stringify(members));
-            localStorage.setItem('sketchBoard_records_v4', JSON.stringify(dailyRecords));
-            localStorage.setItem('sketchBoard_history_v4', JSON.stringify(actionHistory));
+            try {
+                localStorage.setItem('sketchBoard_members_v4', JSON.stringify(members));
+                localStorage.setItem('sketchBoard_records_v4', JSON.stringify(dailyRecords));
+                localStorage.setItem('sketchBoard_history_v4', JSON.stringify(actionHistory));
+            } catch(e) {
+                console.error("写入本地缓存失败", e);
+            }
         }
 
-        // 核心同步广播引擎 (优化强广播机制)
+        // 核心同步广播引擎 (高可靠防冲突版)
         function syncToCloud() {
             if (!supabaseClient) return;
             clearTimeout(cloudSyncTimer);
             
-            // 200ms 高灵敏度防抖触发广播
+            // 350ms 防抖
             cloudSyncTimer = setTimeout(async () => {
                 isSyncingCloud = true; 
                 try {
@@ -410,9 +432,9 @@
                 } catch(e) {
                     console.error("同步到云端出现网络阻塞:", e);
                 }
-                // 延迟释放自同步锁，防止多设备同时更新时数据产生竞态覆盖
+                // 延迟释放自同步锁
                 setTimeout(() => { isSyncingCloud = false; }, 800); 
-            }, 200); 
+            }, 350); 
         }
 
         function saveMembers() { saveToLocalOnly(); syncToCloud(); }
