@@ -56,6 +56,19 @@
         .task-bg-red { background-color: #FEE2E2; }
         .task-bg-orange { background-color: #FEF3C7; }
         .task-bg-green { background-color: #D1FAE5; }
+        .task-bg-red-carry { background-color: #FCA5A5; }
+        .task-bg-orange-carry { background-color: #FDBA74; }
+        .carryover-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border: 1px solid #2d3748;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.78);
+            white-space: nowrap;
+        }
+        .stats-avatar-clickable { cursor: pointer; }
+        .stats-avatar-clickable:hover { transform: scale(1.08); }
 
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -149,6 +162,50 @@
         </div>
     </div>
 
+    <!-- 个人数据分析弹窗 -->
+    <div id="member-stats-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center z-[80]">
+        <div class="sketch-border bg-[#fffdf5] p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto relative">
+            <button onclick="closeMemberStatsModal()" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 font-bold text-2xl">✖</button>
+            <div class="flex items-center gap-4 mb-5">
+                <div id="member-stats-avatar" class="w-14 h-14 shrink-0"></div>
+                <div>
+                    <h2 id="member-stats-title" class="text-2xl font-bold">个人数据分析</h2>
+                    <p class="text-sm text-gray-500 font-bold">点击团队统计里的头像可查看个人明细</p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 bg-yellow-50 p-2 sketch-border-sm mb-5 w-max max-w-full">
+                <span class="font-bold text-sm">时间范围:</span>
+                <input type="date" id="member-stat-start" class="sketch-border-sm px-2 py-1 bg-white text-sm">
+                <span class="text-sm">至</span>
+                <input type="date" id="member-stat-end" class="sketch-border-sm px-2 py-1 bg-white text-sm">
+                <button onclick="renderMemberStats()" class="sketch-border-sm sketch-btn px-3 py-1 bg-blue-100 font-bold ml-1">查询</button>
+                <button onclick="setMemberQuickDate('week')" class="sketch-border-sm px-3 py-1 bg-white hover:bg-gray-100 ml-2">本周</button>
+                <button onclick="setMemberQuickDate('month')" class="sketch-border-sm px-3 py-1 bg-white hover:bg-gray-100">近30天</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                <div class="sketch-border-sm bg-white p-4">
+                    <p class="text-sm text-gray-500 font-bold">完成度</p>
+                    <p id="member-stat-rate" class="text-4xl font-bold mt-2">0%</p>
+                </div>
+                <div class="sketch-border-sm bg-white p-4">
+                    <p class="text-sm text-gray-500 font-bold">任务总数</p>
+                    <p id="member-stat-total" class="text-4xl font-bold mt-2">0</p>
+                </div>
+                <div class="sketch-border-sm bg-white p-4">
+                    <p class="text-sm text-gray-500 font-bold">已完成</p>
+                    <p id="member-stat-done" class="text-4xl font-bold mt-2">0</p>
+                </div>
+            </div>
+
+            <div class="sketch-border bg-gray-50 p-4">
+                <h3 class="text-xl font-bold mb-4">每日任务清单</h3>
+                <div id="member-task-history" class="flex flex-col gap-3 max-h-96 overflow-y-auto pr-2"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- 头像选择弹窗 -->
     <div id="avatar-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center z-50">
         <div class="sketch-border bg-[#fffdf5] p-6 max-w-lg w-full mx-4">
@@ -220,6 +277,7 @@
         let isSyncingCloud = false;
         let cloudSyncTimer = null;
         let realtimeChannel = null;
+        let currentStatsMemberId = null;
 
         // 手绘风小动物彩色 SVG
         const AVATARS = [
@@ -376,6 +434,7 @@
                             renderBoard();
                             renderBottomStats();
                             renderHistoryLog();
+                            if(!document.getElementById('member-stats-modal').classList.contains('hidden')) renderMemberStats();
 
                             statusEl.innerText = '🟢 已收到其他设备更新';
                             statusEl.className = "text-xs font-bold px-2 py-1 bg-green-100 text-green-700 rounded-full ml-2";
@@ -426,7 +485,7 @@
             }
         }
 
-        // 跨天自动重置，保留前一天的备注
+        // 跨天自动重置：保留前一天未完成/进行中的任务，再追加当天默认任务
         function checkMidnightReset() {
             if (!dailyRecords[TODAY]) {
                 const pastDates = Object.keys(dailyRecords).filter(d => d !== TODAY).sort().reverse();
@@ -435,12 +494,32 @@
 
                 members.forEach(m => {
                     let prevRemark = '';
-                    if (lastDate && dailyRecords[lastDate][m.id]) {
-                        prevRemark = dailyRecords[lastDate][m.id].remark || '';
+                    let carryTasks = [];
+
+                    if (lastDate && dailyRecords[lastDate] && dailyRecords[lastDate][m.id]) {
+                        const prevRecord = dailyRecords[lastDate][m.id];
+                        prevRemark = prevRecord.remark || '';
+
+                        if (Array.isArray(prevRecord.tasks)) {
+                            carryTasks = prevRecord.tasks
+                                .filter(t => t && (t.status === 'red' || t.status === 'orange'))
+                                .map(t => createTask(t.text, t.status, {
+                                    carryOver: true,
+                                    originDate: t.originDate || lastDate,
+                                    carryDays: (t.carryDays || 0) + 1
+                                }));
+                        }
                     }
+
+                    const todayDefaultTasks = m.defaultTasks.map(t => createTask(t, 'red', {
+                        carryOver: false,
+                        originDate: TODAY,
+                        carryDays: 0
+                    }));
+
                     dailyRecords[TODAY][m.id] = {
-                        tasks: m.defaultTasks.map(t => ({ text: t, status: 'red' })), 
-                        remark: prevRemark 
+                        tasks: [...carryTasks, ...todayDefaultTasks],
+                        remark: prevRemark
                     };
                 });
             }
@@ -499,6 +578,40 @@
             return AVATARS[member.avatarId];
         }
 
+        function createTask(text, status = 'red', options = {}) {
+            return {
+                text,
+                status,
+                carryOver: !!options.carryOver,
+                originDate: options.originDate || TODAY,
+                carryDays: options.carryDays || 0
+            };
+        }
+
+        function formatShortDate(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return dateStr;
+            return `${Number(parts[1])}.${Number(parts[2])}`;
+        }
+
+        function getCarryoverBadge(task) {
+            if (!task || !task.carryOver) return '';
+            return `<span class="carryover-badge text-red-800">${formatShortDate(task.originDate)}遗留</span>`;
+        }
+
+        function getTaskBgClass(task) {
+            if (task.status === 'green') return 'task-bg-green';
+            if (task.status === 'orange') return task.carryOver ? 'task-bg-orange-carry' : 'task-bg-orange';
+            return task.carryOver ? 'task-bg-red-carry' : 'task-bg-red';
+        }
+
+        function getStatusEmoji(status) {
+            if (status === 'green') return '✅';
+            if (status === 'orange') return '🟠';
+            return '🔴';
+        }
+
         function logAction(memberId, actionText) {
             const member = members.find(m => m.id === memberId);
             if (!member) return;
@@ -536,8 +649,9 @@
                 const remarkOpacity = allDone ? 'opacity-60' : 'opacity-100';
 
                 const tasksHTML = data.tasks.map((t, idx) => {
-                    const bgClass = t.status === 'red' ? 'task-bg-red' : (t.status === 'orange' ? 'task-bg-orange' : 'task-bg-green');
+                    const bgClass = getTaskBgClass(t);
                     const doneClass = t.status === 'green' ? 'task-done' : '';
+                    const carryBadge = getCarryoverBadge(t);
                     
                     return `
                     <div class="flex items-center gap-3 mb-3 group sketch-border-sm p-2 ${bgClass} transition-colors">
@@ -547,6 +661,7 @@
                             <button onclick="setTaskStatus('${member.id}', ${idx}, 'green')" class="w-4 h-4 rounded-full border-2 border-gray-800 ${t.status === 'green' ? 'bg-green-500 shadow-inner' : 'bg-white hover:bg-green-100'}" title="已完成"></button>
                         </div>
                         <div class="flex-1 text-base font-bold ${doneClass} cursor-text break-all" ondblclick="editTodayTask('${member.id}', ${idx}, this)" title="双击修改文字">${t.text}</div>
+                        ${carryBadge}
                         <button onclick="deleteTodayTask('${member.id}', ${idx})" class="text-lg text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="删除">✖</button>
                     </div>
                     `;
@@ -623,13 +738,14 @@
             
             renderBottomStats();
             if(!document.getElementById('stats-modal').classList.contains('hidden')) renderStats();
+            if(!document.getElementById('member-stats-modal').classList.contains('hidden')) renderMemberStats();
         }
 
         function addTodayTaskInline(memberId) {
             const inputEl = document.getElementById(`add-task-input-${memberId}`);
             const text = inputEl.value.trim();
             if (text) {
-                dailyRecords[TODAY][memberId].tasks.push({ text: text, status: 'red' });
+                dailyRecords[TODAY][memberId].tasks.push(createTask(text, 'red')); 
                 saveRecords();
                 renderBoard();
                 inputEl.value = '';
@@ -760,7 +876,7 @@
                 members.forEach(m => {
                     if (!dailyRecords[TODAY]) dailyRecords[TODAY] = {};
                     if (!dailyRecords[TODAY][m.id]) dailyRecords[TODAY][m.id] = { tasks: [], remark: '' };
-                    dailyRecords[TODAY][m.id].tasks = m.defaultTasks.map(t => ({ text: t, status: 'red' }));
+                    dailyRecords[TODAY][m.id].tasks = m.defaultTasks.map(t => createTask(t, 'red')); 
                 });
                 saveRecords();
             }
@@ -826,6 +942,106 @@
                     </div>
                 `;
             });
+        }
+
+        function openMemberStatsModal(memberId) {
+            currentStatsMemberId = memberId;
+            const member = members.find(m => m.id === memberId);
+            if (!member) return;
+
+            document.getElementById('member-stats-title').innerText = `${member.name} 个人数据分析`;
+            document.getElementById('member-stats-avatar').innerHTML = getAvatarHTML(member);
+            document.getElementById('member-stats-modal').classList.remove('hidden');
+            setMemberQuickDate('week');
+        }
+
+        function closeMemberStatsModal() {
+            document.getElementById('member-stats-modal').classList.add('hidden');
+            currentStatsMemberId = null;
+        }
+
+        function setMemberQuickDate(period) {
+            const endInput = document.getElementById('member-stat-end');
+            const startInput = document.getElementById('member-stat-start');
+            const endDate = new Date();
+            const startDate = new Date();
+            if (period === 'week') startDate.setDate(endDate.getDate() - 6);
+            else if (period === 'month') startDate.setDate(endDate.getDate() - 29);
+
+            endInput.value = endDate.toISOString().split('T')[0];
+            startInput.value = startDate.toISOString().split('T')[0];
+            renderMemberStats();
+        }
+
+        function renderMemberStats() {
+            if (!currentStatsMemberId) return;
+            const member = members.find(m => m.id === currentStatsMemberId);
+            if (!member) return;
+
+            const startStr = document.getElementById('member-stat-start').value;
+            const endStr = document.getElementById('member-stat-end').value;
+            const historyEl = document.getElementById('member-task-history');
+            historyEl.innerHTML = '';
+
+            if (!startStr || !endStr || new Date(startStr) > new Date(endStr)) {
+                historyEl.innerHTML = '<p class="text-red-500 font-bold">请选择正确的时间范围！</p>';
+                return;
+            }
+
+            const dates = getDatesInRange(startStr, endStr);
+            let totalScore = 0;
+            let totalTasksCount = 0;
+            let doneCount = 0;
+            let hasAnyRecord = false;
+
+            dates.forEach(date => {
+                const record = dailyRecords[date] && dailyRecords[date][member.id];
+                if (!record || !Array.isArray(record.tasks) || record.tasks.length === 0) return;
+                hasAnyRecord = true;
+
+                let taskRows = '';
+                record.tasks.forEach(t => {
+                    totalTasksCount++;
+                    if (t.status === 'green') { totalScore += 100; doneCount++; }
+                    else if (t.status === 'orange') totalScore += 50;
+
+                    const carryText = t.carryOver ? `<span class="carryover-badge text-red-800 ml-2">${formatShortDate(t.originDate)}遗留</span>` : '';
+                    const statusText = t.status === 'green' ? '已完成' : (t.status === 'orange' ? '进行中' : '未开始');
+                    taskRows += `
+                        <div class="flex items-start gap-2 p-2 bg-white sketch-border-sm">
+                            <span class="text-lg leading-5">${getStatusEmoji(t.status)}</span>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-bold break-all">${t.text} ${carryText}</div>
+                                <div class="text-xs text-gray-500 mt-1">${statusText}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                if (record.remark && record.remark.trim() !== '') {
+                    taskRows += `
+                        <div class="p-2 bg-yellow-50 sketch-border-sm text-sm">
+                            <span class="font-bold">备注：</span>${record.remark}
+                        </div>
+                    `;
+                }
+
+                historyEl.innerHTML += `
+                    <div class="sketch-border-sm bg-gray-100 p-3">
+                        <div class="font-bold text-gray-800 mb-2">${date}</div>
+                        <div class="flex flex-col gap-2">${taskRows}</div>
+                    </div>
+                `;
+            });
+
+            const rate = totalTasksCount === 0 ? 0 : Math.round(totalScore / totalTasksCount);
+            document.getElementById('member-stat-rate').innerText = `${rate}%`;
+            document.getElementById('member-stat-total').innerText = totalTasksCount;
+            document.getElementById('member-stat-done').innerText = doneCount;
+
+            if (!hasAnyRecord) {
+                historyEl.innerHTML = '<p class="text-gray-400 p-4">该时间段内暂无任务记录。</p>';
+            }
         }
 
         function openStatsModal() {
@@ -928,7 +1144,7 @@
                         <div class="w-6 md:w-8 sketch-border bg-[#D1FAE5] transition-all duration-700 relative overflow-hidden" style="height: ${barHeight}px;">
                             <div class="absolute inset-0 opacity-30" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.1) 5px, rgba(0,0,0,0.1) 10px);"></div>
                         </div>
-                        <div class="mt-2 text-2xl font-bold flex items-center justify-center w-8 h-8 md:w-10 md:h-10 select-none">
+                        <div onclick="openMemberStatsModal('${member.id}')" title="查看${member.name}个人数据" class="mt-2 text-2xl font-bold flex items-center justify-center w-8 h-8 md:w-10 md:h-10 select-none stats-avatar-clickable transition-transform">
                             ${getAvatarHTML(member)}
                         </div>
                         <span class="text-xs md:text-sm mt-1 font-bold truncate w-full text-center">${member.name}</span>
@@ -983,7 +1199,7 @@
                         <div class="w-6 md:w-8 sketch-border bg-[#D1FAE5] transition-all duration-700 relative overflow-hidden" style="height: ${barHeight}px;">
                             <div class="absolute inset-0 opacity-30" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.1) 5px, rgba(0,0,0,0.1) 10px);"></div>
                         </div>
-                        <div class="mt-2 text-2xl font-bold flex items-center justify-center w-8 h-8 md:w-10 md:h-10 select-none">
+                        <div onclick="openMemberStatsModal('${member.id}')" title="查看${member.name}个人数据" class="mt-2 text-2xl font-bold flex items-center justify-center w-8 h-8 md:w-10 md:h-10 select-none stats-avatar-clickable transition-transform">
                             ${getAvatarHTML(member)}
                         </div>
                         <span class="text-xs md:text-sm mt-1 font-bold truncate w-full text-center">${member.name}</span>
