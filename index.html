@@ -67,8 +67,22 @@
             background: rgba(255,255,255,0.78);
             white-space: nowrap;
         }
-        .stats-avatar-clickable { cursor: pointer; }
+         .stats-avatar-clickable { cursor: pointer; overflow: visible; }
         .stats-avatar-clickable:hover { transform: scale(1.08); }
+        /* 修复统计区头像：让 SVG/图片在小尺寸容器里也按 100% 显示 */
+        .stats-avatar-clickable svg,
+        #member-stats-avatar svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .stats-avatar-clickable img,
+        #member-stats-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
 
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -164,7 +178,7 @@
 
     <!-- 个人数据分析弹窗 -->
     <div id="member-stats-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center z-[80]">
-        <div class="sketch-border bg-[#fffdf5] p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto relative">
+        <div class="sketch-border bg-[#fffdf5] p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto relative">
             <button onclick="closeMemberStatsModal()" class="absolute top-4 right-4 text-gray-500 hover:text-red-500 font-bold text-2xl">✖</button>
             <div class="flex items-center gap-4 mb-5">
                 <div id="member-stats-avatar" class="w-14 h-14 shrink-0"></div>
@@ -200,8 +214,11 @@
             </div>
 
             <div class="sketch-border bg-gray-50 p-4">
-                <h3 class="text-xl font-bold mb-4">每日任务清单</h3>
-                <div id="member-task-history" class="flex flex-col gap-3 max-h-96 overflow-y-auto pr-2"></div>
+                <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-4">
+                    <h3 class="text-xl font-bold">每日任务清单</h3>
+                    <p class="text-xs text-gray-500 font-bold">默认显示本周；选择日期后，仅显示所选范围内的记录</p>
+                </div>
+                <div id="member-task-history" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[55vh] overflow-y-auto pr-2"></div>
             </div>
         </div>
     </div>
@@ -1008,7 +1025,7 @@
                     const carryText = t.carryOver ? `<span class="carryover-badge text-red-800 ml-2">${formatShortDate(t.originDate)}遗留</span>` : '';
                     const statusText = t.status === 'green' ? '已完成' : (t.status === 'orange' ? '进行中' : '未开始');
                     taskRows += `
-                        <div class="flex items-start gap-2 p-2 bg-white sketch-border-sm">
+                        <div class="flex items-start gap-2 p-2 bg-gray-50 sketch-border-sm">
                             <span class="text-lg leading-5">${getStatusEmoji(t.status)}</span>
                             <div class="flex-1 min-w-0">
                                 <div class="font-bold break-all">${t.text} ${carryText}</div>
@@ -1027,9 +1044,12 @@
                 }
 
                 historyEl.innerHTML += `
-                    <div class="sketch-border-sm bg-gray-100 p-3">
-                        <div class="font-bold text-gray-800 mb-2">${date}</div>
-                        <div class="flex flex-col gap-2">${taskRows}</div>
+                    <div class="sketch-border-sm bg-white p-3 min-h-[170px] flex flex-col">
+                        <div class="font-bold text-gray-800 mb-2 pb-1 border-b-2 border-gray-200 flex justify-between items-center">
+                            <span>${date}</span>
+                            <span class="text-xs text-gray-400">${record.tasks.length}项</span>
+                        </div>
+                        <div class="flex flex-col gap-2 flex-1 overflow-y-auto max-h-64 pr-1">${taskRows}</div>
                     </div>
                 `;
             });
@@ -1144,7 +1164,7 @@
                         <div class="w-6 md:w-8 sketch-border bg-[#D1FAE5] transition-all duration-700 relative overflow-hidden" style="height: ${barHeight}px;">
                             <div class="absolute inset-0 opacity-30" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.1) 5px, rgba(0,0,0,0.1) 10px);"></div>
                         </div>
-                        <div onclick="openMemberStatsModal('${member.id}')" title="查看${member.name}个人数据" class="mt-2 text-2xl font-bold flex items-center justify-center w-8 h-8 md:w-10 md:h-10 select-none stats-avatar-clickable transition-transform">
+                        <div onclick="openMemberStatsModal('${member.id}')" title="查看${member.name}个人数据" class="mt-2 flex items-center justify-center w-10 h-10 md:w-12 md:h-12 select-none stats-avatar-clickable transition-transform">
                             ${getAvatarHTML(member)}
                         </div>
                         <span class="text-xs md:text-sm mt-1 font-bold truncate w-full text-center">${member.name}</span>
@@ -1199,7 +1219,7 @@
                         <div class="w-6 md:w-8 sketch-border bg-[#D1FAE5] transition-all duration-700 relative overflow-hidden" style="height: ${barHeight}px;">
                             <div class="absolute inset-0 opacity-30" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(0,0,0,0.1) 5px, rgba(0,0,0,0.1) 10px);"></div>
                         </div>
-                        <div onclick="openMemberStatsModal('${member.id}')" title="查看${member.name}个人数据" class="mt-2 text-2xl font-bold flex items-center justify-center w-8 h-8 md:w-10 md:h-10 select-none stats-avatar-clickable transition-transform">
+                        <div onclick="openMemberStatsModal('${member.id}')" title="查看${member.name}个人数据" class="mt-2 flex items-center justify-center w-10 h-10 md:w-12 md:h-12 select-none stats-avatar-clickable transition-transform">
                             ${getAvatarHTML(member)}
                         </div>
                         <span class="text-xs md:text-sm mt-1 font-bold truncate w-full text-center">${member.name}</span>
