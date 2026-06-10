@@ -821,8 +821,15 @@
                         prevRemark = prevRecord.remark || '';
 
                         if (Array.isArray(prevRecord.tasks)) {
+                            const seenCarryTaskTexts = new Set();
                             carryTasks = prevRecord.tasks
                                 .filter(t => t && (t.status === 'red' || t.status === 'orange'))
+                                .filter(t => {
+                                    const key = String(t.text || '').trim();
+                                    if (!key || seenCarryTaskTexts.has(key)) return false;
+                                    seenCarryTaskTexts.add(key);
+                                    return true;
+                                })
                                 .map(t => createTask(t.text, t.status, {
                                     carryOver: true,
                                     originDate: t.originDate || lastDate,
@@ -831,11 +838,21 @@
                         }
                     }
 
-                    const todayDefaultTasks = m.defaultTasks.map(t => createTask(t, 'red', {
-                        carryOver: false,
-                        originDate: TODAY,
-                        carryDays: 0
-                    }));
+                    // 如果昨天遗留任务和今天默认任务文字相同，只保留“遗留任务”，不再重复新增同名默认任务
+                    const carryTextSet = new Set(carryTasks.map(t => String(t.text || '').trim()));
+                    const seenDefaultTaskTexts = new Set();
+                    const todayDefaultTasks = m.defaultTasks
+                        .filter(t => {
+                            const key = String(t || '').trim();
+                            if (!key || carryTextSet.has(key) || seenDefaultTaskTexts.has(key)) return false;
+                            seenDefaultTaskTexts.add(key);
+                            return true;
+                        })
+                        .map(t => createTask(t, 'red', {
+                            carryOver: false,
+                            originDate: TODAY,
+                            carryDays: 0
+                        }));
 
                     dailyRecords[TODAY][m.id] = {
                         tasks: [...carryTasks, ...todayDefaultTasks],
